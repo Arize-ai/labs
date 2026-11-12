@@ -1,0 +1,54 @@
+---
+import HeroPlaceholder from "../heroes/HeroPlaceholder.astro";
+
+/**
+ * Landing hero: a full-bleed art band that fades into the page, followed by
+ * the page's h1 and lede. Pass art through the `art` slot.
+ */
+export interface Props {
+  heading: string;
+  lede?: string;
+}
+const { heading, lede } = Astro.props;
+---
+
+<section class="hero page-grid bleed" aria-labelledby="hero-heading">
+  <div class="art bleed">
+    <slot name="art"><HeroPlaceholder /></slot>
+  </div>
+  <div class="copy">
+    <h1 id="hero-heading">{heading}</h1>
+    {lede && <p class="lede">{lede}</p>}
+    <slot />
+  </div>
+</section>
+
+<style>
+  .art {
+    height: min(78vh, 720px);
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, #000 55%, transparent);
+  }
+  .art > :global(*) { width: 100%; height: 100%; object-fit: cover; }
+  .copy { padding: var(--space-9) 0 0; text-align: center; }
+  h1 {
+    max-width: 14ch;
+    margin: 0 auto var(--space-5);
+    font: 600 var(--text-display) / 1 var(--font-sans);
+    letter-spacing: var(--tracking-display);
+    text-wrap: balance;
+  }
+  .lede {
+    max-width: 52ch;
+    margin: 0 auto;
+    color: var(--soft);
+    font-size: var(--text-lede);
+    line-height: 1.4;
+    text-wrap: balance;
+  }
+
+  @media (max-width: 720px) {
+    .art { height: auto; aspect-ratio: 4 / 5; }
+    .copy { padding-top: var(--space-6); }
+  }
+</style>

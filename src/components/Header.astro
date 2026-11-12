@@ -1,0 +1,94 @@
+---
+import { site } from "../site.config";
+import Wordmark from "./Wordmark.astro";
+import ThemeToggle from "./ThemeToggle.astro";
+
+const path = Astro.url.pathname;
+const isCurrent = (href: string) => !href.includes("#") && (path === href || path.startsWith(`${href}/`));
+---
+
+<header class="site-header page-grid">
+  <div class="bar">
+    <a class="home" href="/" aria-label={`${site.name} home`}><Wordmark /></a>
+
+    <nav class="nav" aria-label="Main">
+      <ul>
+        {site.nav.map((item) => (
+          <li><a href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}>{item.label}</a></li>
+        ))}
+      </ul>
+      <ThemeToggle />
+    </nav>
+
+    <!-- Phone menu: a disclosure, so it works without JavaScript. -->
+    <details class="menu">
+      <summary>Menu</summary>
+      <div class="menu-panel">
+        <ul>
+          {site.nav.map((item) => (
+            <li><a href={item.href} aria-current={isCurrent(item.href) ? "page" : undefined}>{item.label}</a></li>
+          ))}
+        </ul>
+        <ThemeToggle />
+      </div>
+    </details>
+  </div>
+</header>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+  }
+  .bar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-5);
+    height: var(--header-height);
+  }
+  .home { color: var(--fg); text-decoration: none; }
+
+  ul { display: flex; gap: var(--space-5); padding: 0; list-style: none; }
+  .nav, .menu-panel { display: flex; align-items: center; gap: var(--space-5); }
+  .nav a, .menu a {
+    color: var(--dim);
+    font: 500 var(--text-micro) / 1 var(--font-mono);
+    letter-spacing: var(--tracking-micro);
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  .nav a:hover, .menu a:hover, a[aria-current="page"] { color: var(--fg); }
+
+  .menu { display: none; }
+  .menu summary {
+    list-style: none;
+    cursor: pointer;
+    font: 500 var(--text-micro) / 1 var(--font-mono);
+    letter-spacing: var(--tracking-micro);
+    text-transform: uppercase;
+  }
+  .menu summary::-webkit-details-marker { display: none; }
+  .menu[open] summary { color: var(--dim); }
+  .menu-panel {
+    position: absolute;
+    top: 100%;
+    left: calc(-1 * var(--gutter));
+    right: calc(-1 * var(--gutter));
+    flex-direction: column;
+    align-items: flex-start;
+    padding: var(--space-5) var(--gutter) var(--space-6);
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+  }
+  .menu-panel ul { flex-direction: column; gap: var(--space-4); }
+  .menu-panel a { font-size: var(--text-small); }
+
+  @media (max-width: 720px) {
+    .nav { display: none; }
+    .menu { display: block; }
+  }
+</style>

@@ -1,0 +1,27 @@
+---
+import type { Post } from "../lib/content";
+import PostCard from "./PostCard.astro";
+
+export interface Props {
+  posts: Post[];
+}
+const { posts } = Astro.props;
+---
+
+{posts.length > 0 ? (
+  <ul class="post-list">
+    {posts.map((post) => <li><PostCard post={post} variant="row" headingLevel="h2" /></li>)}
+  </ul>
+) : (
+  <p class="empty">No posts yet.</p>
+)}
+
+<style>
+  .post-list { display: grid; gap: var(--space-7); padding: 0; list-style: none; }
+  .empty { color: var(--dim); }
+
+  @media (max-width: 720px) {
+    .post-list { gap: 0; border-top: 1px solid var(--rule); }
+    li { padding: 14px 0; border-bottom: 1px solid var(--rule); }
+  }
+</style>

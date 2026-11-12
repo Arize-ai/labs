@@ -1,0 +1,33 @@
+---
+import BaseLayout from "./BaseLayout.astro";
+import type { Props as BaseProps } from "./BaseLayout.astro";
+
+/** Interior pages: a page title and intro above the content. */
+export interface Props extends BaseProps {
+  heading: string;
+  intro?: string;
+  eyebrow?: string;
+}
+const { heading, intro, eyebrow, ...rest } = Astro.props;
+---
+
+<BaseLayout title={heading} description={intro} {...rest}>
+  <header class="page-header">
+    {eyebrow && <p class="eyebrow">{eyebrow}</p>}
+    <h1>{heading}</h1>
+    {intro && <p class="intro">{intro}</p>}
+    <slot name="header" />
+  </header>
+  <slot />
+</BaseLayout>
+
+<style>
+  .page-header { padding: var(--space-9) 0 var(--space-7); }
+  .eyebrow { margin-bottom: var(--space-4); }
+  h1 { font: 600 var(--text-h2) / 1.05 var(--font-sans); letter-spacing: var(--tracking-tight); text-wrap: balance; }
+  .intro { max-width: 52ch; margin-top: var(--space-4); color: var(--soft); font-size: var(--text-intro); line-height: 1.45; }
+
+  @media (max-width: 720px) {
+    .page-header { padding: var(--space-7) 0 var(--space-6); }
+  }
+</style>

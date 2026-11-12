@@ -1,0 +1,27 @@
+---
+export interface Props {
+  items: { name: string; body: string }[];
+}
+const { items } = Astro.props;
+---
+
+<ul class="pillars">
+  {items.map((item) => (
+    <li>
+      <h3>{item.name}</h3>
+      <p>{item.body}</p>
+    </li>
+  ))}
+</ul>
+
+<style>
+  .pillars { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); padding: 0; list-style: none; }
+  li { padding: var(--space-7) 28px 52px; background: var(--surface); }
+  h3 { margin-bottom: var(--space-2); font: 600 20px / 1.2 var(--font-sans); letter-spacing: -0.01em; }
+  p { color: var(--soft); line-height: 1.5; }
+
+  @media (max-width: 720px) {
+    .pillars { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+    li { padding: var(--space-6) 22px 34px; }
+  }
+</style>

@@ -1,0 +1,65 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Hero from "../components/sections/Hero.astro";
+import Section from "../components/sections/Section.astro";
+import Pillars from "../components/sections/Pillars.astro";
+import FeatureRows from "../components/sections/FeatureRows.astro";
+import PostGrid from "../components/sections/PostGrid.astro";
+import TeamGrid from "../components/sections/TeamGrid.astro";
+import { getPosts, getTeam } from "../lib/content";
+import { site } from "../site.config";
+
+const pillars = [
+  { name: "Open Tooling", body: "Universal access to AI tools with best practices built in, so building AI well isn't a privilege of the few." },
+  { name: "Open Evals", body: "Honest, shared ways to measure whether AI actually works, so anyone can check the progress for themselves." },
+  { name: "Open Research", body: "Findings shared as we go, to educate the field and to learn from everyone building with AI." },
+];
+
+const projects = [
+  {
+    name: "Arize Phoenix",
+    href: "https://github.com/Arize-ai/phoenix",
+    cta: "View on GitHub",
+    body: "An open-source platform for AI observability and evaluation. Phoenix traces LLM applications and agents end to end, runs evaluations against those traces, and turns what it finds into datasets, experiments and prompt iterations. It runs locally, in a notebook or self-hosted, and is built on OpenTelemetry.",
+  },
+  {
+    name: "OpenInference",
+    href: "https://github.com/Arize-ai/openinference",
+    cta: "View on GitHub",
+    body: "A set of semantic conventions and instrumentation libraries, complementary to OpenTelemetry, for tracing AI applications. OpenInference defines how LLM calls, retrievals, tool use and agent steps are recorded, and ships auto-instrumentation for popular model providers and frameworks across Python, JavaScript and Java.",
+  },
+];
+
+const latestPosts = (await getPosts()).slice(0, 3);
+const team = (await getTeam()).slice(0, 8);
+---
+
+<BaseLayout description={site.description}>
+  <Hero heading="An Open Frontier" lede={site.description} />
+
+  <Section id="mission" class="mission">
+    <Pillars items={pillars} />
+  </Section>
+
+  <Section id="projects" heading="Projects">
+    <FeatureRows items={projects} />
+  </Section>
+
+  <Section id="writing" heading="Writing" intro="News, writing and resources about the open-source projects.">
+    <a slot="action" class="button" href="/blog">All posts</a>
+    <PostGrid posts={latestPosts} />
+  </Section>
+
+  <Section id="team" heading="Team" intro="The engineers, researchers and designers who build Phoenix and OpenInference.">
+    <a slot="action" class="button" href="/team">Meet the team</a>
+    <TeamGrid members={team} />
+  </Section>
+</BaseLayout>
+
+<style>
+  /* The pillars sit close under the hero copy, as one beat. */
+  .mission { padding-top: var(--space-9); }
+  @media (max-width: 720px) {
+    .mission { padding-top: var(--space-8); }
+  }
+</style>

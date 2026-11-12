@@ -1,0 +1,80 @@
+---
+import type { GetStaticPaths } from "astro";
+import { Image } from "astro:assets";
+import { render } from "astro:content";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import PostCard from "../../components/PostCard.astro";
+import { getPostsByAuthor, getTeam, type Member } from "../../lib/content";
+
+export const getStaticPaths = (async () => {
+  const team = await getTeam();
+  return team.map((member) => ({ params: { id: member.id }, props: { member } }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+  member: Member;
+}
+const { member } = Astro.props;
+const { name, role, avatar, links } = member.data;
+const { Content } = await render(member);
+const posts = await getPostsByAuthor(member.id);
+const linkList = Object.entries(links).filter(([, href]) => href);
+---
+
+<BaseLayout title={name} description={`${name}, ${role} at Arize Labs.`} type="profile">
+  <article class="profile">
+    <figure class="headshot">
+      {avatar ? <Image src={avatar} alt="" widths={[400, 800]} sizes="(max-width: 840px) 60vw, 360px" /> : <span class="placeholder">[ photo ]</span>}
+    </figure>
+    <div class="details">
+      <p class="eyebrow"><a href="/team">Team</a></p>
+      <h1>{name}</h1>
+      <p class="role">{role}</p>
+      <div class="prose bio"><Content /></div>
+      {linkList.length > 0 && (
+        <ul class="links">
+          {linkList.map(([label, href]) => <li><a class="button" href={href} rel="me noopener">{label}</a></li>)}
+        </ul>
+      )}
+    </div>
+  </article>
+
+  {posts.length > 0 && (
+    <section class="posts" aria-labelledby="posts-heading">
+      <h2 id="posts-heading">Posts by {name}</h2>
+      <ul>
+        {posts.map((post) => <li><PostCard post={post} variant="row" /></li>)}
+      </ul>
+    </section>
+  )}
+</BaseLayout>
+
+<style>
+  .profile {
+    display: grid;
+    grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+    gap: var(--space-7);
+    align-items: start;
+    padding-top: var(--space-9);
+  }
+  .headshot { aspect-ratio: 4 / 5; overflow: hidden; background: var(--surface); border: 1px solid var(--rule); }
+  .headshot img, .headshot .placeholder { width: 100%; height: 100%; object-fit: cover; }
+  .eyebrow a { text-decoration: none; }
+  h1 { margin-top: var(--space-4); font: 600 var(--text-h2) / 1.05 var(--font-sans); letter-spacing: var(--tracking-tight); }
+  .role { margin-top: var(--space-2); color: var(--soft); font-size: var(--text-intro); }
+  .bio { margin-top: var(--space-6); }
+  .links { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-6); padding: 0; list-style: none; }
+
+  .posts { padding-top: var(--space-section); }
+  .posts h2 { margin-bottom: var(--space-6); font: 600 28px / 1.2 var(--font-sans); letter-spacing: -0.015em; }
+  .posts ul { display: grid; gap: var(--space-7); padding: 0; list-style: none; }
+
+  @media (max-width: 840px) {
+    .profile { grid-template-columns: minmax(0, 1fr); gap: var(--space-6); padding-top: var(--space-7); }
+    .headshot { max-width: 280px; }
+  }
+  @media (max-width: 720px) {
+    .posts ul { gap: 0; border-top: 1px solid var(--rule); }
+    .posts li { padding: 14px 0; border-bottom: 1px solid var(--rule); }
+  }
+</style>

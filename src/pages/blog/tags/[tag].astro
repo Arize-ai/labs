@@ -1,0 +1,30 @@
+---
+import type { GetStaticPaths } from "astro";
+import PageLayout from "../../../layouts/PageLayout.astro";
+import PostList from "../../../components/PostList.astro";
+import { getPosts, getTags, tagSlug, type Post } from "../../../lib/content";
+
+export const getStaticPaths = (async () => {
+  const [posts, tags] = await Promise.all([getPosts(), getTags()]);
+  return tags.map((tag) => ({
+    params: { tag: tag.slug },
+    props: { name: tag.name, posts: posts.filter((post) => post.data.tags.some((t) => tagSlug(t) === tag.slug)) },
+  }));
+}) satisfies GetStaticPaths;
+
+interface Props {
+  name: string;
+  posts: Post[];
+}
+const { name, posts } = Astro.props;
+---
+
+<PageLayout eyebrow="Tag" heading={name} title={`Posts tagged “${name}”`} description={`Posts tagged “${name}”.`} noindex>
+  <a slot="header" class="back eyebrow" href="/blog">← All posts</a>
+  <PostList posts={posts} />
+</PageLayout>
+
+<style>
+  .back { display: inline-block; margin-top: var(--space-5); text-decoration: none; }
+  .back:hover { color: var(--fg); }
+</style>

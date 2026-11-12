@@ -1,0 +1,11 @@
+---
+import PageLayout from "../../layouts/PageLayout.astro";
+import TeamGrid from "../../components/sections/TeamGrid.astro";
+import { getTeam } from "../../lib/content";
+
+const team = await getTeam();
+---
+
+<PageLayout heading="Team" intro="The engineers, researchers and designers who build Phoenix and OpenInference.">
+  <TeamGrid members={team} />
+</PageLayout>
