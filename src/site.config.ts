@@ -1,0 +1,19 @@
+export const site = {
+  name: "Arize Labs",
+  description:
+    "Where ambition meets creativity. We chase early ideas and build in the open, on a mission to make AI work for humanity.",
+  locale: "en",
+  nav: [
+    { label: "Projects", href: "/#projects" },
+    { label: "Blog", href: "/blog" },
+    { label: "Team", href: "/team" },
+  ],
+  social: {
+    github: "https://github.com/Arize-ai",
+    x: "https://x.com/arizeai",
+    linkedin: "https://www.linkedin.com/company/arizeai",
+  },
+  postsPerPage: 10,
+} as const;
+
+export type NavItem = (typeof site.nav)[number];

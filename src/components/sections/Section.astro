@@ -1,0 +1,45 @@
+---
+/**
+ * Standard landing-page section: optional heading and intro, then content.
+ * Use `bleed` for sections whose content spans the full page width.
+ */
+export interface Props {
+  id?: string;
+  heading?: string;
+  intro?: string;
+  bleed?: boolean;
+  class?: string;
+}
+const { id, heading, intro, bleed = false, class: className } = Astro.props;
+const headingId = id && heading ? `${id}-heading` : undefined;
+---
+
+<section id={id} class:list={["section", className, { "page-grid bleed": bleed }]} aria-labelledby={headingId}>
+  {(heading || Astro.slots.has("action")) && (
+    <header class="section-header">
+      <div>
+        {heading && <h2 id={headingId}>{heading}</h2>}
+        {intro && <p class="intro">{intro}</p>}
+      </div>
+      <slot name="action" />
+    </header>
+  )}
+  <slot />
+</section>
+
+<style>
+  .section { padding-top: var(--space-section); }
+  .section-header {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: var(--space-5);
+    margin-bottom: var(--space-7);
+  }
+  h2 { font: 600 var(--text-h2) / 1.05 var(--font-sans); letter-spacing: var(--tracking-tight); }
+  .intro { max-width: 52ch; margin-top: var(--space-4); color: var(--soft); font-size: var(--text-intro); line-height: 1.45; }
+
+  @media (max-width: 720px) {
+    .section-header { flex-direction: column; align-items: start; margin-bottom: var(--space-6); }
+  }
+</style>

@@ -1,0 +1,25 @@
+---
+import type { Post } from "../../lib/content";
+import PostCard from "../PostCard.astro";
+
+export interface Props {
+  posts: Post[];
+}
+const { posts } = Astro.props;
+---
+
+<ul class="post-grid">
+  {posts.map((post) => <li><PostCard post={post} /></li>)}
+</ul>
+
+<style>
+  .post-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px var(--space-4); padding: 0; list-style: none; }
+
+  @media (max-width: 840px) {
+    .post-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 720px) {
+    .post-grid { grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--rule); }
+    li { padding: 14px 0; border-bottom: 1px solid var(--rule); }
+  }
+</style>

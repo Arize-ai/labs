@@ -1,0 +1,49 @@
+---
+import type { GetStaticPaths, Page } from "astro";
+import PageLayout from "../../layouts/PageLayout.astro";
+import PostList from "../../components/PostList.astro";
+import Pagination from "../../components/Pagination.astro";
+import { getPosts, getTags, tagUrl, type Post } from "../../lib/content";
+import { site } from "../../site.config";
+
+export const getStaticPaths = (async ({ paginate }) => {
+  const posts = await getPosts();
+  return paginate(posts, { pageSize: site.postsPerPage });
+}) satisfies GetStaticPaths;
+
+interface Props {
+  page: Page<Post>;
+}
+const { page } = Astro.props;
+const tags = await getTags();
+---
+
+<PageLayout
+  heading="Blog"
+  intro="News, writing and resources about the open-source projects."
+  title={page.currentPage > 1 ? `Blog, page ${page.currentPage}` : "Blog"}
+>
+  {tags.length > 0 && (
+    <nav slot="header" class="tag-nav" aria-label="Tags">
+      <ul>
+        {tags.map((tag) => <li><a href={tagUrl(tag.name)}>{tag.name} <span>{tag.count}</span></a></li>)}
+      </ul>
+    </nav>
+  )}
+  <PostList posts={page.data} />
+  <Pagination page={page} />
+</PageLayout>
+
+<style>
+  .tag-nav { margin-top: var(--space-6); }
+  .tag-nav ul { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); padding: 0; list-style: none; }
+  .tag-nav a {
+    color: var(--dim);
+    font: 500 var(--text-micro) / 1.4 var(--font-mono);
+    letter-spacing: var(--tracking-micro);
+    text-transform: uppercase;
+    text-decoration: none;
+  }
+  .tag-nav a:hover { color: var(--fg); }
+  .tag-nav span { color: var(--rule); }
+</style>

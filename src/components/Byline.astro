@@ -1,0 +1,27 @@
+---
+import type { CollectionEntry } from "astro:content";
+import { getEntries } from "astro:content";
+import { memberUrl } from "../lib/content";
+
+export interface Props {
+  authors: CollectionEntry<"posts">["data"]["authors"];
+  /** Link names to member pages. */
+  link?: boolean;
+}
+const { authors, link = true } = Astro.props;
+const members = await getEntries(authors);
+---
+
+<span class="byline">
+  {members.map((member, i) => (
+    <>
+      {i > 0 && (i === members.length - 1 ? " and " : ", ")}
+      {link ? <a href={memberUrl(member)}>{member.data.name}</a> : member.data.name}
+    </>
+  ))}
+</span>
+
+<style>
+  .byline a { text-decoration: none; }
+  .byline a:hover { text-decoration: underline; text-underline-offset: 3px; }
+</style>

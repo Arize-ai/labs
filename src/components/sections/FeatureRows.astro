@@ -1,0 +1,51 @@
+---
+/**
+ * Alternating art-and-text rows (art left, then right, ...). Each row's art
+ * is a placeholder frame until real art is supplied.
+ */
+export interface Props {
+  items: { name: string; body: string; href?: string; cta?: string }[];
+}
+const { items } = Astro.props;
+---
+
+<div class="features">
+  {items.map((item, i) => (
+    <article class:list={["feature", i % 2 ? "art-right" : "art-left"]}>
+      <figure class="art placeholder" aria-hidden="true">[ art ]</figure>
+      <div class="text">
+        <h3>{item.name}</h3>
+        <p>{item.body}</p>
+        {item.href && <a class="button" href={item.href}>{item.cta ?? "Learn more"}</a>}
+      </div>
+    </article>
+  ))}
+</div>
+
+<style>
+  .features { display: grid; gap: var(--space-9); }
+  .feature {
+    display: grid;
+    grid-template-columns: minmax(0, 56fr) minmax(0, 44fr);
+    gap: var(--space-7);
+    align-items: center;
+  }
+  .art-right { grid-template-columns: minmax(0, 44fr) minmax(0, 56fr); }
+  .art-right .art { order: 2; }
+  .art { aspect-ratio: 1; max-height: 620px; }
+  h3 { margin-bottom: var(--space-4); font: 600 var(--text-feature) / 1.05 var(--font-sans); letter-spacing: var(--tracking-tight); }
+  p { color: var(--soft); font-size: var(--text-body-lg); line-height: 1.5; }
+  .button { margin-top: 28px; }
+
+  @media (max-width: 840px) {
+    .features { gap: var(--space-8); }
+    .feature, .art-right { grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+    .art-right .art { order: 0; }
+    .art { aspect-ratio: 4 / 3; }
+    .text { max-width: 560px; }
+  }
+
+  @media (max-width: 720px) {
+    p { font-size: var(--text-body); }
+  }
+</style>

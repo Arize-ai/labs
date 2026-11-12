@@ -1,0 +1,19 @@
+---
+/**
+ * Stand-in for the hero art. The real hero (a Three.js scene) will replace
+ * this: render a <canvas> here and mount it from a <script> in this file,
+ * which Astro bundles and runs once per page. Respect prefers-reduced-motion.
+ */
+---
+
+<div class="hero-placeholder placeholder" aria-hidden="true">[ hero art ]</div>
+
+<style>
+  .hero-placeholder {
+    width: 100%;
+    height: 100%;
+    background:
+      radial-gradient(circle at center, color-mix(in srgb, var(--fg) 14%, transparent) 0 1px, transparent 1.4px) center / 24px 24px,
+      var(--placeholder);
+  }
+</style>
