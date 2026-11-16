@@ -24,7 +24,7 @@ const sliders = [
 ] as const;
 
 const stages = [
-  { name: "Geometry", note: "The drawing's shapes, in its own 400 × 250 units: the outline of everything that will carry light, and the 1px rules. The rules are vectors and stay exactly like this to the end; everything else is light, a tone from 0 to 1 at every point." },
+  { name: "Geometry", note: "The drawing's two kinds of geometry, in its own 400 × 250 units. Shapes carry light: from here on they are a tone from 0 to 1 at every point, which ends up as dots. Rules are 1px vectors and stay exactly like this to the end. Some drawings shape their light with noise or gradients rather than edges; their outlines here trace that light instead." },
   { name: "Fills", note: "Each shape's light as a flat tone in ink or orange, from its signed distance: full inside, falling to nothing across one dot at the edge. Tone says how dark: a model call is near full, a tool call faint. Some drawings add their own terms here, such as noise or a gradient." },
   { name: "Glow", note: "Light spilling past each edge, falling off exponentially with distance. With this, the field is exactly what the drawing's light function returns." },
   { name: "Edge fade", note: "The print multiplies the light by a fade toward the card's edges, so it never stops at a hard border. Set by the edge fade sliders." },
@@ -130,6 +130,11 @@ const stages = [
           </svg>
         </div>
         <p class="stage-note" data-stage-note></p>
+        <ul class="legend" aria-label="Geometry key">
+          <li><span class="swatch shape"></span> Shape that carries ink light</li>
+          <li><span class="swatch shape-accent"></span> Shape that carries orange light</li>
+          <li><span class="swatch rule"></span> Rule (1px vector)</li>
+        </ul>
         <p class="meta">
           <span data-meta></span>
           <span class="actions">
@@ -263,15 +268,15 @@ const stages = [
     const mine = ++job;
     if (n >= 7) return commit(n, svg);
     const css = getComputedStyle(stage);
-    const ink = rgb(css.getPropertyValue("--fg"));
-    const accent = lab.classList.contains("no-accent") ? ink : rgb(css.getPropertyValue("--accent"));
+    const ink = rgb(css.getPropertyValue(n === 1 ? "--lab-shape" : "--fg"));
+    const accent = lab.classList.contains("no-accent") ? ink : rgb(css.getPropertyValue(n === 1 ? "--lab-shape-accent" : "--accent"));
     const key = JSON.stringify([seed, kind, screen, n, ink, accent]);
     const hit = cache.get(key);
     if (hit) return commit(n, svg, hit);
 
     lab.dataset.pending = "";
     const field = coverArtField(seed, kind, screen);
-    const parts = { glow: n >= 3, fade: n >= 4, grain: n >= 5 };
+    const parts = { glow: n >= 3, fade: n >= 4, grain: n >= 5, hardEdges: n === 1 };
     const done = (image: ImageData) => {
       if (cache.size > 24) cache.delete(cache.keys().next().value!);
       cache.set(key, image);
@@ -312,14 +317,14 @@ const stages = [
       }
       if (row < h) return void requestAnimationFrame(step);
       const img = new ImageData(w, h);
-      // Geometry: an outline wherever the fill starts, at any tone.
+      // Geometry: each shape outlined at its edge and tinted, whatever its tone.
       const lit = (o: number) => tone[o] > 0.03;
       for (let o = 0; o < w * h; o++) {
         let t = tone[o];
         if (n === 1) {
           const x = o % w;
           const edge = lit(o) && ((x > 0 && !lit(o - 1)) || (x < w - 1 && !lit(o + 1)) || (o >= w && !lit(o - w)) || (o < w * (h - 1) && !lit(o + w)));
-          t = edge ? 1 : 0;
+          t = edge ? 1 : lit(o) ? 0.1 : 0;
         }
         const c = isSig[o] ? accent : ink;
         img.data[o * 4] = c[0]; img.data[o * 4 + 1] = c[1]; img.data[o * 4 + 2] = c[2]; img.data[o * 4 + 3] = Math.round(t * 255);
@@ -524,6 +529,20 @@ const stages = [
   .step[aria-pressed="true"] .n { color: var(--accent); }
   @media (max-width: 720px) { .steps { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
   .lab[data-pending] .stage::after { content: "Drawing…"; position: absolute; top: var(--space-2); right: var(--space-3); font: 500 var(--text-micro) / 1.4 var(--font-mono); letter-spacing: var(--tracking-micro); text-transform: uppercase; color: var(--dim); }
+  /*
+   * The geometry stage leaves the palette on purpose, so shapes and rules
+   * read as different things at a glance.
+   */
+  .lab { --lab-shape: var(--fg); --lab-shape-accent: var(--accent); --lab-rule: #1f7ae0; }
+  :global(:root[data-theme="dark"]) .lab { --lab-rule: #5aa8ff; }
+  .lab[data-pipeline="1"] [data-main] :global(svg > g:last-of-type path) { stroke: var(--lab-rule) !important; stroke-opacity: 1 !important; }
+  .legend { display: none; gap: var(--space-2) var(--space-5); flex-wrap: wrap; margin: var(--space-2) 0 0; padding: 0; list-style: none; font-size: var(--text-small); color: var(--soft); }
+  .lab[data-pipeline="1"] .legend { display: flex; }
+  .legend li { display: flex; gap: var(--space-2); align-items: center; }
+  .swatch { width: 18px; height: 10px; border: 1.5px solid; }
+  .swatch.shape { border-color: var(--lab-shape); background: color-mix(in srgb, var(--lab-shape) 10%, transparent); }
+  .swatch.shape-accent { border-color: var(--lab-shape-accent); background: color-mix(in srgb, var(--lab-shape-accent) 10%, transparent); }
+  .swatch.rule { height: 0; border-width: 1.5px 0 0; border-color: var(--lab-rule); }
   .stage-note { max-width: var(--prose-max); margin: var(--space-3) 0 0; font-size: var(--text-small); color: var(--soft); min-height: 3em; }
 
   .lab.no-ground :global(svg.cover-art > rect) { display: none; }

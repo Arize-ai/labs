@@ -143,10 +143,10 @@ function inPolygon(x: number, y: number, poly: Pt[]) {
 }
 
 /** Parts of the light that the dev explorer can switch off, to show it in stages. */
-const parts = { glow: true };
+const parts = { glow: true, hardEdges: false };
 
 /** 1 inside a shape of signed distance d, 0 outside, over a one-dot edge. */
-const solid = (d: number) => clamp(0.5 - d / P);
+const solid = (d: number) => (parts.hardEdges ? (d < 0 ? 1 : 0) : clamp(0.5 - d / P));
 /** Light falling off with distance d outside a shape, over w. */
 const glow = (d: number, w: number) => (parts.glow ? Math.exp(-Math.max(d, 0) / w) : 0);
 
@@ -674,6 +674,8 @@ export function coverArt(seed: string, kind?: ArtKind, view?: ViewBox, screen?: 
 
 export interface ToneParts {
   glow?: boolean;
+  /** Fill shapes exactly to their edge, with no one-dot softening. */
+  hardEdges?: boolean;
   fade?: boolean;
   grain?: boolean;
 }
@@ -685,12 +687,14 @@ export interface ToneParts {
  */
 export function coverArtField(seed: string, kind?: ArtKind, screen?: Screen) {
   const { g, k } = draw(seed, kind, screen);
-  const tone = (x: number, y: number, { glow = true, ...rest }: ToneParts = {}) => {
+  const tone = (x: number, y: number, { glow = true, hardEdges = false, ...rest }: ToneParts = {}) => {
     parts.glow = glow;
+    parts.hardEdges = hardEdges;
     try {
       return g.tone(x, y, rest);
     } finally {
       parts.glow = true;
+      parts.hardEdges = false;
     }
   };
   return { kind: k, svg: g.svg(k), tone };
