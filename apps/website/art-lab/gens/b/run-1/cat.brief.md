@@ -1,0 +1,13 @@
+TITLE: A seated cat silhouetted against a rising full moon
+
+IDEA: The cat is the night's quiet watcher, and its glowing eyes in a dark shape say "cat" faster than any other feature.
+
+COMPOSITION: A full moon, a circle of radius 64 centred at (200, 118), sitting low so its lower third is hidden behind the cat and the horizon. A horizon line at y 188 running from x 104 to x 296. The cat sits upright and front-on, centred on x 200 with its base on the horizon. Its body is a pear shape rising from y 188 to y 128, 74 wide at the base and narrowing to 40 at the shoulders. Its head is a circle of radius 21 centred at (200, 112). Two ears are triangles with tips at (183, 82) and (217, 82) and bases about 14 wide, set on the upper sides of the head. The tail sweeps out from the right hip at (236, 186), curls forward around the front paws and ends at (176, 184), about 6 thick. Two almond-shaped slit eyes, each 7 long and 3 tall, sit at (192, 111) and (208, 111). Two small front paws are bumps at (190, 187) and (210, 187).
+
+LIGHT: The moon is the brightest mass, at tone 0.9 across its disc. Very faint mottling (0.75–0.85) in two or three soft patches suggests maria. It has a generous glow that falls from 0.5 at its rim to 0 by radius 105, so the dots shrink outward into the background. The cat is a dark silhouette at tone 0, so the moon's dots stop sharply at its edge and the shape reads by contrast. A thin rim light of 0.3 sits along the cat's upper-left edge (left ear, left side of head, left shoulder), as if moonlight is wrapping it. The ground below the horizon is a faint 0.1 band, fading to 0 by y 200. Everything outside the glow is left as plain texture. The cat's interior, tail and paws stay fully dark.
+
+LINES: A full-strength solid outline traces the whole cat silhouette: ears, head, body, the curl of the tail and the paws. A half-strength solid line marks the horizon, fading out toward its ends. A faint solid circle traces the moon's edge, only where it is visible above and beside the cat. Faint short strokes mark whiskers, three per side, from (190, 117) out to x 172 and from (210, 117) out to x 228. Each eye gets a full-strength solid outline in orange.
+
+ORANGE: The two slit eyes, filled solid at full tone with their outlines. They are the only lit thing inside the dark shape, so the eye goes straight to them and reads "cat" instantly, even at thumbnail size.
+
+VARIATION: Vary the tilt of the head by up to 6° either way, with the ears and eyes following it. Vary the placement of the moon's faint mottled patches, and the exact curl of the tail by a few units.

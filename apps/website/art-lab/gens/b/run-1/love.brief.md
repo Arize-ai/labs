@@ -1,0 +1,13 @@
+TITLE: Two stars in a binary orbit around a shared empty centre
+
+IDEA: Love is two bodies that bend each other's paths so that neither circles itself, and both turn around a point that belongs to both of them.
+
+COMPOSITION: The barycentre sits at (196, 125). The larger star is a disc of radius 18 centred at (160, 122). The smaller star is a disc of radius 12 centred at (250, 129), on the opposite side of the barycentre and farther from it, as the lighter partner would be. Each star sits on its own ellipse, and both ellipses are centred on the barycentre and tilted 8° counter-clockwise. The larger star's ellipse has semi-axes 36 × 15. The smaller star's ellipse has semi-axes 54 × 22. A slender bridge of light, the mass passing between them, arcs gently upward from the small star's left limb (238, 127) to the large star's right limb (178, 120), peaking near (208, 116). The barycentre itself is marked by a single dot of radius 2.5. Everything else on the card is empty lattice.
+
+LIGHT: The larger star is the brightest mass. Its core is at 1.0 with dots kissing, falling to 0.85 at the rim, with a slight highlight offset toward the upper left. The smaller star has a core of 0.85 that falls to 0.7 at its rim. Each star carries a round glow. The larger star's glow falls from 0.6 to nothing over a radius of 62. The smaller star's glow falls from 0.5 to nothing over a radius of 46. Where the two glows overlap around the barycentre, their tones add to about 0.45, so the space between the stars reads as warmer than the space outside them. The bridge is a thin band about 4 units wide at 0.55, thinning to 0.35 at its midpoint. The ellipses carry no dots. All background beyond the glows stays at the bare lattice. That includes the area below the orbits and every corner.
+
+LINES: The larger star's rim is a full solid circle and the smaller star's rim is a full solid circle. Both orbital ellipses are half strength and dashed, with dashes short and even. A faint solid curve traces the upper edge of the bridge. Two very short faint solid tick marks, each 6 units long, cross at the barycentre beneath the orange dot. These read like the crosshair on an astronomical chart.
+
+ORANGE: The barycentre dot at (196, 125) is the only orange. It is the point both stars fall around, the one place neither of them occupies, and it is the essay's meaning. A tiny bright accent in the dim gap between two big lights pulls the eye straight to the middle.
+
+VARIATION: Vary the orbital phase. Rotate both stars together around the barycentre by a random angle between −20° and +20°, keeping them exactly opposite each other on their ellipses. Move the bridge with them. Also vary the ellipse tilt randomly between 4° and 14°.
