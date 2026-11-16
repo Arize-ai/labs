@@ -30,7 +30,7 @@ const sliders = [
   intro="The generated post covers, drawn live by the same code the build runs. Any seed works; the seed is hashed, not read, so it varies the details of a style but never its subject."
   noindex
 >
-  <div class="lab" data-lab data-default-screen={JSON.stringify(DEFAULT_SCREEN)}>
+  <div class="lab" data-lab data-mode="halftone" data-default-screen={JSON.stringify(DEFAULT_SCREEN)}>
     <form class="controls" data-controls>
       <fieldset>
         <legend class="eyebrow">Input</legend>
@@ -70,6 +70,14 @@ const sliders = [
       </fieldset>
 
       <fieldset>
+        <legend class="eyebrow">Print</legend>
+        <label class="check"><input type="radio" name="mode" value="halftone" checked /> Halftone (what ships)</label>
+        <label class="check"><input type="radio" name="mode" value="tone" /> Continuous tone</label>
+        <label class="check"><input type="radio" name="mode" value="raw" /> Raw light, before edge fade and grain</label>
+        <p class="help">The drawing defines light as a continuous field in its own 400 × 250 units. Printing samples that field once per dot and rounds it to a dot size; the rules are drawn separately as vectors.</p>
+      </fieldset>
+
+      <fieldset>
         <legend class="eyebrow">Layers</legend>
         <label class="check"><input type="checkbox" name="ground" checked /> Ground (dot matrix)</label>
         <label class="check"><input type="checkbox" name="light" checked /> Light (halftone)</label>
@@ -81,6 +89,7 @@ const sliders = [
         <legend class="eyebrow">Guides</legend>
         <label class="check"><input type="checkbox" name="subject" checked /> Subject box</label>
         <label class="check"><input type="checkbox" name="phone" checked /> Phone square crop</label>
+        <label class="check"><input type="checkbox" name="samples" /> Sample points (one per dot)</label>
         <p class="help">Light and dark follow the theme switch in the header.</p>
       </fieldset>
     </form>
@@ -89,7 +98,15 @@ const sliders = [
       <section class="stage-wrap" aria-label="Cover art">
         <div class="stage art-host" data-stage>
           <div class="art" data-main></div>
+          <canvas class="field" data-field aria-hidden="true"></canvas>
+          <div class="art rules-only" data-rules aria-hidden="true"></div>
           <svg class="guides" viewBox={`0 0 ${ART_BOX.width} ${ART_BOX.height}`} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <defs>
+              <pattern id="samples" patternUnits="userSpaceOnUse" width="6.4" height="6.4" data-samples-pattern>
+                <circle cx="1.6" cy="1.6" r=".45" /><circle cx="4.8" cy="4.8" r=".45" />
+              </pattern>
+            </defs>
+            <rect class="samples" data-guide="samples" width={ART_BOX.width} height={ART_BOX.height} fill="url(#samples)" />
             <g data-guide="phone">
               <rect class="shade" x="0" y="0" width="75" height={ART_BOX.height} />
               <rect class="shade" x="325" y="0" width="75" height={ART_BOX.height} />
@@ -151,7 +168,7 @@ const sliders = [
 </PageLayout>
 
 <script>
-  import { coverArt, ART_KINDS, DEFAULT_SCREEN, type ArtKind, type Screen } from "../components/art/cover-art";
+  import { coverArt, coverArtField, ART_BOX, ART_KINDS, DEFAULT_SCREEN, type ArtKind, type Screen } from "../components/art/cover-art";
 
   const lab = document.querySelector<HTMLElement>("[data-lab]")!;
   const form = lab.querySelector<HTMLFormElement>("[data-controls]")!;
@@ -174,10 +191,68 @@ const sliders = [
   }
 
   function syncLayers() {
-    for (const name of ["ground", "light", "rules", "accent", "subject", "phone"]) {
+    for (const name of ["ground", "light", "rules", "accent", "subject", "phone", "samples"]) {
       lab.classList.toggle(`no-${name}`, !input<HTMLInputElement>(name).checked);
     }
+    renderField(read());
   }
+
+  const stage = $<HTMLElement>("[data-stage]");
+  const canvas = $<HTMLCanvasElement>("[data-field]");
+  const swatch = document.createElement("canvas").getContext("2d")!;
+  function rgb(color: string): [number, number, number] {
+    swatch.fillStyle = "#000";
+    swatch.fillStyle = color.trim();
+    swatch.fillRect(0, 0, 1, 1);
+    const [r, g, b] = swatch.getImageData(0, 0, 1, 1).data;
+    return [r, g, b];
+  }
+
+  let fieldKey = "";
+  let fieldJob = 0;
+  /**
+   * The unscreened tone on a canvas: ink or accent at the same alpha the
+   * print would turn into dot size. It doesn't depend on the pitch or levels,
+   * only on the drawing, the edge fade and the grain.
+   */
+  function renderField({ seed, kind, screen }: ReturnType<typeof read>) {
+    const mode = (form.elements.namedItem("mode") as RadioNodeList).value;
+    lab.dataset.mode = mode;
+    if (mode === "halftone") return;
+    const css = getComputedStyle(stage);
+    const ink = rgb(css.getPropertyValue("--fg"));
+    const accent = lab.classList.contains("no-accent") ? ink : rgb(css.getPropertyValue("--accent"));
+    const key = JSON.stringify([seed, kind, screen.grain, screen.edgeFadeX, screen.edgeFadeY, mode, ink, accent]);
+    if (key === fieldKey) return;
+    fieldKey = key;
+    const job = ++fieldJob;
+    const field = coverArtField(seed, kind, screen);
+    const raw = mode === "raw";
+    const paint = (scale: number, rowsPerFrame: number) => {
+      const w = ART_BOX.width * scale, h = ART_BOX.height * scale;
+      const img = new ImageData(w, h);
+      let row = 0;
+      const step = () => {
+        if (job !== fieldJob) return;
+        for (const end = Math.min(h, row + rowsPerFrame); row < end; row++) {
+          for (let px = 0; px < w; px++) {
+            const [i, a] = field.tone((px + 0.5) / scale, (row + 0.5) / scale, raw);
+            const [c, t] = a > i ? [accent, a] : [ink, i];
+            const o = (row * w + px) * 4;
+            img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = Math.round(t * 255);
+          }
+        }
+        if (row < h) return void requestAnimationFrame(step);
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext("2d")!.putImageData(img, 0, 0);
+        if (scale === 1) paint(2, 20);
+      };
+      step();
+    };
+    paint(1, Infinity);
+  }
+  new MutationObserver(() => { fieldKey = ""; renderField(read()); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   function syncUrl(state: ReturnType<typeof read>) {
     const q = new URLSearchParams({ seed: state.seed });
@@ -223,6 +298,15 @@ const sliders = [
       const svg = draw(seed, kind, screen);
       const resolved = svg.match(/data-art="(\w+)"/)?.[1] as ArtKind;
       $("[data-main]").innerHTML = svg;
+      $("[data-rules]").innerHTML = draw(seed, kind, screen);
+      const p = screen.pitch;
+      const pattern = $<SVGPatternElement>("[data-samples-pattern]");
+      pattern.setAttribute("width", String(2 * p));
+      pattern.setAttribute("height", String(2 * p));
+      const [c1, c2] = pattern.querySelectorAll("circle");
+      c1.setAttribute("cx", String(p / 2)); c1.setAttribute("cy", String(p / 2));
+      c2.setAttribute("cx", String(1.5 * p)); c2.setAttribute("cy", String(1.5 * p));
+      renderField(state);
       lab.querySelectorAll("[data-copy-of]").forEach((el) => (el.innerHTML = draw(seed, kind, screen)));
 
       const bytes = new Blob([svg]).size;
@@ -334,7 +418,14 @@ const sliders = [
   .guides path, .guides .box { vector-effect: non-scaling-stroke; stroke-dasharray: 3 3; }
   .guides .shade { fill: var(--fg); fill-opacity: 0.05; stroke: none; }
   .guides text { fill: var(--dim); stroke: none; font: 500 6px var(--font-mono); letter-spacing: var(--tracking-micro); text-transform: uppercase; }
-  .no-subject [data-guide="subject"], .no-phone [data-guide="phone"] { display: none; }
+  .no-subject [data-guide="subject"], .no-phone [data-guide="phone"], .no-samples [data-guide="samples"] { display: none; }
+  .guides pattern circle { fill: var(--accent); stroke: none; }
+  .field { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+  .rules-only { display: none; }
+  .rules-only :global(svg > rect), .rules-only :global(svg > g:first-of-type) { display: none; }
+  .lab:not([data-mode="halftone"]) .field, .lab:not([data-mode="halftone"]) .rules-only { display: block; }
+  .lab:not([data-mode="halftone"]) [data-main] :global(svg > g) { display: none; }
+  .lab.no-light .field { display: none; }
 
   .lab.no-ground :global(svg.cover-art > rect) { display: none; }
   .lab.no-light :global(svg.cover-art > g:first-of-type) { display: none; }

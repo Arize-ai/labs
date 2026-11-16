@@ -192,6 +192,7 @@ class Graphic {
   private grain: (x: number, y: number) => number;
   private id: string;
   private screen: Screen;
+  private light?: Light;
 
   /** `id` keeps pattern ids unique when several covers share a page. */
   constructor(id: string, seed: number, screen: Screen = DEFAULT_SCREEN) {
@@ -216,23 +217,31 @@ class Graphic {
    * little grain keeps flat areas from looking mechanical.
    */
   print(light: Light) {
-    const { pitch: p, levels, minLevel, grain: grainAmount, edgeFadeX, edgeFadeY } = this.screen;
+    this.light = light;
+    const { pitch: p, levels, minLevel } = this.screen;
     const cols = Math.round(W / p), rows = Math.round(H / p);
     for (let j = 0; j < rows; j++) {
       for (let i = j & 1; i < cols; i += 2) {
-        const x = (i + 0.5) * p, y = (j + 0.5) * p;
-        const v = light(x, y);
-        let [ink, sig] = typeof v === "number" ? [v, 0] : v;
-        const edge = smooth(clamp(Math.min(x, W - x) / edgeFadeX)) * smooth(clamp(Math.min(y, H - y) / edgeFadeY));
-        const grain = (this.grain(x / 5, y / 5) - 0.5) * grainAmount;
-        ink = clamp(ink * edge + (ink > 0.02 ? grain : 0));
-        sig = clamp(sig * edge);
+        const [ink, sig] = this.tone((i + 0.5) * p, (j + 0.5) * p);
         const [color, t] = sig > ink ? (["sig", sig] as const) : (["ink", ink] as const);
         // Dot area tracks tone, so radius goes with its square root.
         const k = Math.round(Math.sqrt(t) * levels);
         if (k >= minLevel) this.dot(color, k, i, j);
       }
     }
+  }
+
+  /** The light that was printed, as unquantized ink and accent at any point. */
+  tone(x: number, y: number, raw = false): [ink: number, accent: number] {
+    const v = this.light?.(x, y) ?? 0;
+    let [ink, sig] = typeof v === "number" ? [v, 0] : v;
+    if (raw) return [clamp(ink), clamp(sig)];
+    const { grain: grainAmount, edgeFadeX, edgeFadeY } = this.screen;
+    const edge = smooth(clamp(Math.min(x, W - x) / edgeFadeX)) * smooth(clamp(Math.min(y, H - y) / edgeFadeY));
+    const grain = (this.grain(x / 5, y / 5) - 0.5) * grainAmount;
+    ink = clamp(ink * edge + (ink > 0.02 ? grain : 0));
+    sig = clamp(sig * edge);
+    return [ink, sig];
   }
 
   line(d: string, stroke: Stroke, { width = 1, dash = "", fill = false } = {}) {
@@ -657,9 +666,23 @@ export type ViewBox = [x: number, y: number, w: number, h: number];
  * the social cards in src/lib/og); by default it is the whole drawing.
  */
 export function coverArt(seed: string, kind?: ArtKind, view?: ViewBox, screen?: Screen): string {
+  const { g, k } = draw(seed, kind, screen);
+  return g.svg(k, view);
+}
+
+/**
+ * The same drawing before it is screened, for the dev explorer: the SVG, and
+ * the continuous tone it printed. `raw` skips the edge fade and grain.
+ */
+export function coverArtField(seed: string, kind?: ArtKind, screen?: Screen) {
+  const { g, k } = draw(seed, kind, screen);
+  return { kind: k, svg: g.svg(k), tone: (x: number, y: number, raw = false) => g.tone(x, y, raw) };
+}
+
+function draw(seed: string, kind?: ArtKind, screen?: Screen) {
   const h = hashString(seed);
   const k = kind ?? ART_KINDS[h % ART_KINDS.length];
   const g = new Graphic(h.toString(36), h, screen);
   KINDS[k](g, rng(h), h);
-  return g.svg(k, view);
+  return { g, k };
 }
