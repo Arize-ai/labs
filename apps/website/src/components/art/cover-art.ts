@@ -37,16 +37,45 @@ const H = 250;
 // square centre crop of phone thumbnails (x 75–325).
 const X0 = 84, X1 = 316, Y0 = 56, Y1 = 194;
 
-// The screen: dots on every other cell of a P grid (cells where i + j is
-// even), which is a square screen turned 45° with P√2 between neighbours.
-// At typical card widths that lands on the hero's 4.4px cell.
-const P = 3.2;
-const COLS = Math.round(W / P), ROWS = Math.round(H / P);
-// Full tone: neighbours just touch, as in the hero's highlights.
-const R_MAX = P * 0.74;
-// Radius steps. Below MIN_LEVEL a dot is left to the ground.
-const LEVELS = 12, MIN_LEVEL = 3;
-const GROUND_R = 0.55;
+/** How the light is printed. The site always uses DEFAULT_SCREEN; other values are for exploring. */
+export interface Screen {
+  /**
+   * Cell size. Dots sit on every other cell of a pitch grid (cells where
+   * i + j is even), which is a square screen turned 45° with pitch × √2
+   * between neighbours.
+   */
+  pitch: number;
+  /** A full-tone dot's radius as a fraction of the pitch. */
+  fullTone: number;
+  /** Radius steps from no tone to full tone. */
+  levels: number;
+  /** Steps below this are left to the ground. */
+  minLevel: number;
+  groundRadius: number;
+  groundOpacity: number;
+  /** Noise added to lit areas so flat tone doesn't look mechanical. */
+  grain: number;
+  /** How far in from the left/right and top/bottom edges the light fades out. */
+  edgeFadeX: number;
+  edgeFadeY: number;
+}
+
+// At typical card widths the pitch lands on the hero's 4.4px cell, and at
+// full tone neighbours just touch, as in the hero's highlights.
+export const DEFAULT_SCREEN: Screen = {
+  pitch: 3.2,
+  fullTone: 0.74,
+  levels: 12,
+  minLevel: 3,
+  groundRadius: 0.55,
+  groundOpacity: 0.16,
+  grain: 0.08,
+  edgeFadeX: 44,
+  edgeFadeY: 30,
+};
+
+// Shapes that drawings print use the default pitch for their one-dot edge.
+const P = DEFAULT_SCREEN.pitch;
 
 // ---------------------------------------------------------------------------
 // Randomness, noise and shape helpers
@@ -153,7 +182,7 @@ const STROKES: Record<Stroke, string> = {
 
 // Small dots read lighter than their size alone suggests against the
 // ground, so the smallest steps are also a little transparent.
-const levelOpacity = (k: number) => (k <= MIN_LEVEL ? 0.55 : k === MIN_LEVEL + 1 ? 0.75 : 0.92);
+const levelOpacity = (k: number, min: number) => (k <= min ? 0.55 : k === min + 1 ? 0.75 : 0.92);
 
 class Graphic {
   private dots = new Map<string, string[]>();
@@ -162,10 +191,12 @@ class Graphic {
   private defs: string[] = [];
   private grain: (x: number, y: number) => number;
   private id: string;
+  private screen: Screen;
 
   /** `id` keeps pattern ids unique when several covers share a page. */
-  constructor(id: string, seed: number) {
+  constructor(id: string, seed: number, screen: Screen = DEFAULT_SCREEN) {
     this.id = id;
+    this.screen = screen;
     this.grain = makeNoise(seed + 101);
   }
 
@@ -174,7 +205,8 @@ class Graphic {
     const prev = this.last.get(key);
     const d = this.dots.get(key) ?? [];
     // Cell indices keep the relative moves exact.
-    d.push(prev ? `m${num((i - prev[0]) * P)} ${num((j - prev[1]) * P)}h0` : `M${num((i + 0.5) * P)} ${num((j + 0.5) * P)}h0`);
+    const p = this.screen.pitch;
+    d.push(prev ? `m${num((i - prev[0]) * p)} ${num((j - prev[1]) * p)}h0` : `M${num((i + 0.5) * p)} ${num((j + 0.5) * p)}h0`);
     this.dots.set(key, d);
     this.last.set(key, [i, j]);
   }
@@ -184,19 +216,21 @@ class Graphic {
    * little grain keeps flat areas from looking mechanical.
    */
   print(light: Light) {
-    for (let j = 0; j < ROWS; j++) {
-      for (let i = j & 1; i < COLS; i += 2) {
-        const x = (i + 0.5) * P, y = (j + 0.5) * P;
+    const { pitch: p, levels, minLevel, grain: grainAmount, edgeFadeX, edgeFadeY } = this.screen;
+    const cols = Math.round(W / p), rows = Math.round(H / p);
+    for (let j = 0; j < rows; j++) {
+      for (let i = j & 1; i < cols; i += 2) {
+        const x = (i + 0.5) * p, y = (j + 0.5) * p;
         const v = light(x, y);
         let [ink, sig] = typeof v === "number" ? [v, 0] : v;
-        const edge = smooth(clamp(Math.min(x, W - x) / 44)) * smooth(clamp(Math.min(y, H - y) / 30));
-        const grain = (this.grain(x / 5, y / 5) - 0.5) * 0.08;
+        const edge = smooth(clamp(Math.min(x, W - x) / edgeFadeX)) * smooth(clamp(Math.min(y, H - y) / edgeFadeY));
+        const grain = (this.grain(x / 5, y / 5) - 0.5) * grainAmount;
         ink = clamp(ink * edge + (ink > 0.02 ? grain : 0));
         sig = clamp(sig * edge);
         const [color, t] = sig > ink ? (["sig", sig] as const) : (["ink", ink] as const);
         // Dot area tracks tone, so radius goes with its square root.
-        const k = Math.round(Math.sqrt(t) * LEVELS);
-        if (k >= MIN_LEVEL) this.dot(color, k, i, j);
+        const k = Math.round(Math.sqrt(t) * levels);
+        if (k >= minLevel) this.dot(color, k, i, j);
       }
     }
   }
@@ -230,16 +264,17 @@ class Graphic {
   /** `view` widens the viewBox past the drawing (social cards); the ground fills it. */
   svg(kind: string, view: ViewBox = [0, 0, W, H]) {
     const [vx, vy, vw, vh] = view.map(num);
+    const { pitch: p, fullTone, levels, minLevel, groundRadius: gr, groundOpacity } = this.screen;
     const gid = `ground-${this.id}`;
     const ground =
-      `<pattern id="${gid}" width="${2 * P}" height="${2 * P}" patternUnits="userSpaceOnUse" style="fill:var(--fg);fill-opacity:.16">` +
-      `<circle cx="${P / 2}" cy="${P / 2}" r="${GROUND_R}"/><circle cx="${1.5 * P}" cy="${1.5 * P}" r="${GROUND_R}"/></pattern>`;
+      `<pattern id="${gid}" width="${2 * p}" height="${2 * p}" patternUnits="userSpaceOnUse" style="fill:var(--fg);fill-opacity:${String(groundOpacity).replace(/^0\./, ".")}">` +
+      `<circle cx="${p / 2}" cy="${p / 2}" r="${gr}"/><circle cx="${1.5 * p}" cy="${1.5 * p}" r="${gr}"/></pattern>`;
     const dots = [...this.dots]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, d]) => {
         const sig = key.startsWith("sig"), k = +key.slice(3);
-        const style = sig ? "stroke:var(--accent)" : `stroke:var(--fg);stroke-opacity:${levelOpacity(k)}`;
-        return `<path style="${style}" stroke-width="${num((2 * R_MAX * k) / LEVELS)}" d="${d.join("")}"/>`;
+        const style = sig ? "stroke:var(--accent)" : `stroke:var(--fg);stroke-opacity:${levelOpacity(k, minLevel)}`;
+        return `<path style="${style}" stroke-width="${num((2 * p * fullTone * k) / levels)}" d="${d.join("")}"/>`;
       })
       .join("");
     return (
@@ -621,10 +656,10 @@ export type ViewBox = [x: number, y: number, w: number, h: number];
  * the seed picks one, so a run of posts gets a mix. `view` reframes it (see
  * the social cards in src/lib/og); by default it is the whole drawing.
  */
-export function coverArt(seed: string, kind?: ArtKind, view?: ViewBox): string {
+export function coverArt(seed: string, kind?: ArtKind, view?: ViewBox, screen?: Screen): string {
   const h = hashString(seed);
   const k = kind ?? ART_KINDS[h % ART_KINDS.length];
-  const g = new Graphic(h.toString(36), h);
+  const g = new Graphic(h.toString(36), h, screen);
   KINDS[k](g, rng(h), h);
   return g.svg(k, view);
 }

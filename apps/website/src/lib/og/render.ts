@@ -22,7 +22,7 @@ import { fileURLToPath } from "node:url";
 import type { ImageMetadata } from "astro";
 import satori from "satori";
 import sharp from "sharp";
-import { coverArt, ART_BOX, type ArtKind, type ViewBox } from "../../components/art/cover-art";
+import { coverArt, ART_BOX, type ArtKind, type Screen, type ViewBox } from "../../components/art/cover-art";
 import { art as brandArt } from "../brand";
 
 export const OG_WIDTH = 1200;
@@ -60,7 +60,8 @@ export interface Card {
   /** One line under the title: the byline, or a description. */
   subtitle?: string;
   /** Generated cover art, or a picture. */
-  panel: { art: ArtKind | undefined; seed: string } | CardPicture;
+  /** `screen` overrides the halftone, for the dev cover-art explorer. */
+  panel: { art: ArtKind | undefined; seed: string; screen?: Screen } | CardPicture;
   /** Accessible description of the image, for og:image:alt. */
   alt: string;
 }
@@ -112,7 +113,7 @@ export function formatDuration(seconds: number) {
  * width, and the left edge fades to transparent so the dots dissolve into
  * the card instead of stopping at a box.
  */
-async function artLayer(seed: string, kind: ArtKind | undefined): Promise<Buffer> {
+async function artLayer(seed: string, kind: ArtKind | undefined, screen?: Screen): Promise<Buffer> {
   const width = OG_WIDTH - ART_X;
   const { subject } = ART_BOX;
   // The subject sits in the art that's past the fade.
@@ -120,9 +121,9 @@ async function artLayer(seed: string, kind: ArtKind | undefined): Promise<Buffer
   const w = width / scale, h = OG_HEIGHT / scale;
   const cx = (subject.x0 + subject.x1) / 2 - FADE / 4 / scale, cy = (subject.y0 + subject.y1) / 2;
   const view: ViewBox = [cx - w / 2, cy - h / 2, w, h];
-  const svg = coverArt(seed, kind, view)
+  const svg = coverArt(seed, kind, view, screen)
     .replace("<svg ", `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${OG_HEIGHT}" `)
-    .replace(/fill-opacity:\.16/, `fill-opacity:${T.dot}`)
+    .replace(/fill-opacity:[\d.]+/, `fill-opacity:${T.dot}`)
     .replaceAll("var(--fg)", T.fg)
     .replaceAll("var(--bg)", T.bg)
     .replaceAll("var(--accent)", ACCENT);
@@ -248,7 +249,7 @@ export async function renderCard(card: Card): Promise<Buffer> {
   const picture = "image" in card.panel ? card.panel : undefined;
   const bleed = !!picture && (picture.video !== undefined || !!picture.grayscale);
   const layer = !picture
-    ? await artLayer((card.panel as { seed: string }).seed, (card.panel as { art: ArtKind | undefined }).art)
+    ? await artLayer((card.panel as { seed: string }).seed, (card.panel as { art: ArtKind | undefined }).art, (card.panel as { screen?: Screen }).screen)
     : bleed
       ? await bleedLayer(picture)
       : await framedLayer(picture);

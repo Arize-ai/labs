@@ -44,6 +44,22 @@ const baseLinks = defineMdastPlugin({
   },
 });
 
+/**
+ * Tools that exist only under `astro dev`, such as the cover-art explorer at
+ * /dev/cover-art. They are never built or deployed.
+ * @type {import("astro").AstroIntegration}
+ */
+const devTools = {
+  name: "dev-tools",
+  hooks: {
+    "astro:config:setup": ({ command, injectRoute }) => {
+      if (command !== "dev") return;
+      injectRoute({ pattern: "/dev/cover-art", entrypoint: "./src/dev/cover-art.astro" });
+      injectRoute({ pattern: "/dev/cover-art/card.png", entrypoint: "./src/dev/cover-art-card.ts" });
+    },
+  },
+};
+
 // https://astro.build/config
 export default defineConfig({
   // Canonical links and social card URLs (og:image) are absolute, so `site`
@@ -53,7 +69,7 @@ export default defineConfig({
   // Fully static: GitHub Pages serves the built files and runs no server code.
   // llms.txt, llms-full.txt and a markdown copy of each post and page: see
   // src/integrations/llms-txt.mjs.
-  integrations: [mdx(), sitemap(), llmsTxt()],
+  integrations: [mdx(), sitemap(), llmsTxt(), devTools],
   // Code blocks use the Pierre theme (https://diffs.com/theme). Shiki emits
   // the light colors inline and the dark ones as --shiki-dark variables;
   // global.css switches to them with the site's theme.

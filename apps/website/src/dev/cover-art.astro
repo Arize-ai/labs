@@ -1,0 +1,364 @@
+---
+/**
+ * Cover-art explorer (dev only, see astro.config.mjs). Draws the real
+ * generator from src/components/art/cover-art.ts in the browser, so every
+ * control re-runs exactly what the build runs.
+ */
+import PageLayout from "../layouts/PageLayout.astro";
+import { ART_BOX, ART_KINDS, DEFAULT_SCREEN } from "../components/art/cover-art";
+import { getPosts } from "../lib/content";
+
+const posts = (await getPosts()).map((p) => ({ id: p.id, title: p.data.title, art: p.data.art ?? "", cover: !!p.data.cover }));
+const { subject } = ART_BOX;
+
+const sliders = [
+  { key: "pitch", label: "Pitch", min: 1.6, max: 8, step: 0.1, help: "Cell size. Dots sit on every other cell, a 45° screen." },
+  { key: "fullTone", label: "Full-tone radius", min: 0.3, max: 1.2, step: 0.01, help: "A full-tone dot's radius, as a fraction of the pitch. 0.74 makes neighbours just touch." },
+  { key: "levels", label: "Levels", min: 2, max: 24, step: 1, help: "Radius steps from no tone to full tone." },
+  { key: "minLevel", label: "Cut-off level", min: 0, max: 12, step: 1, help: "Steps below this are left to the ground." },
+  { key: "grain", label: "Grain", min: 0, max: 0.4, step: 0.01, help: "Noise in lit areas, so flat tone doesn't look mechanical." },
+  { key: "edgeFadeX", label: "Edge fade, sides", min: 1, max: 140, step: 1, help: "How far in from the left and right edges the light fades out." },
+  { key: "edgeFadeY", label: "Edge fade, top and bottom", min: 1, max: 100, step: 1, help: "How far in from the top and bottom the light fades out." },
+  { key: "groundRadius", label: "Ground dot radius", min: 0, max: 1.6, step: 0.05, help: "The faint dot matrix behind everything." },
+  { key: "groundOpacity", label: "Ground opacity", min: 0, max: 0.6, step: 0.01, help: "The ground's ink. The social card always uses its own." },
+] as const;
+---
+
+<PageLayout
+  eyebrow="Dev tool"
+  heading="Cover art"
+  intro="The generated post covers, drawn live by the same code the build runs. Any seed works; the seed is hashed, not read, so it varies the details of a style but never its subject."
+  noindex
+>
+  <div class="lab" data-lab data-default-screen={JSON.stringify(DEFAULT_SCREEN)}>
+    <form class="controls" data-controls>
+      <fieldset>
+        <legend class="eyebrow">Input</legend>
+        <label class="field">
+          <span>Seed</span>
+          <span class="row">
+            <input type="text" name="seed" value="welcome-to-arize-labs" spellcheck="false" autocomplete="off" />
+            <button type="button" class="button small" data-random>Random</button>
+          </span>
+        </label>
+        <label class="field">
+          <span>Style</span>
+          <select name="kind">
+            <option value="">Auto (picked by the seed)</option>
+            {ART_KINDS.map((k) => <option value={k}>{k}</option>)}
+          </select>
+        </label>
+        <label class="field">
+          <span>Load a post</span>
+          <select name="post">
+            <option value="">Choose…</option>
+            {posts.map((p) => <option value={p.id} data-art={p.art} disabled={p.cover}>{p.title}{p.cover ? " (has a cover image)" : ""}</option>)}
+          </select>
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <legend class="eyebrow">Halftone screen</legend>
+        {sliders.map((s) => (
+          <label class="field slider" title={s.help}>
+            <span class="slider-label">{s.label} <output data-out={s.key} /></span>
+            <input type="range" name={s.key} min={s.min} max={s.max} step={s.step} value={DEFAULT_SCREEN[s.key]} />
+            <span class="help">{s.help}</span>
+          </label>
+        ))}
+        <button type="button" class="button small" data-reset>Reset to the site's screen</button>
+      </fieldset>
+
+      <fieldset>
+        <legend class="eyebrow">Layers</legend>
+        <label class="check"><input type="checkbox" name="ground" checked /> Ground (dot matrix)</label>
+        <label class="check"><input type="checkbox" name="light" checked /> Light (halftone)</label>
+        <label class="check"><input type="checkbox" name="rules" checked /> Structure (1px rules)</label>
+        <label class="check"><input type="checkbox" name="accent" checked /> Signal orange</label>
+      </fieldset>
+
+      <fieldset>
+        <legend class="eyebrow">Guides</legend>
+        <label class="check"><input type="checkbox" name="subject" checked /> Subject box</label>
+        <label class="check"><input type="checkbox" name="phone" checked /> Phone square crop</label>
+        <p class="help">Light and dark follow the theme switch in the header.</p>
+      </fieldset>
+    </form>
+
+    <div class="results">
+      <section class="stage-wrap" aria-label="Cover art">
+        <div class="stage art-host" data-stage>
+          <div class="art" data-main></div>
+          <svg class="guides" viewBox={`0 0 ${ART_BOX.width} ${ART_BOX.height}`} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <g data-guide="phone">
+              <rect class="shade" x="0" y="0" width="75" height={ART_BOX.height} />
+              <rect class="shade" x="325" y="0" width="75" height={ART_BOX.height} />
+              <path d={`M75.5 0V${ART_BOX.height}M324.5 0V${ART_BOX.height}`} />
+              <text x="79" y={ART_BOX.height - 6}>phone crop</text>
+            </g>
+            <g data-guide="subject">
+              <rect class="box" x={subject.x0 + 0.5} y={subject.y0 + 0.5} width={subject.x1 - subject.x0 - 1} height={subject.y1 - subject.y0 - 1} />
+              <text x={subject.x0 + 3} y={subject.y0 - 4}>subject</text>
+            </g>
+          </svg>
+        </div>
+        <p class="meta">
+          <span data-meta></span>
+          <span class="actions">
+            <button type="button" class="button small" data-copy>Copy SVG</button>
+            <a class="button small" data-download download="cover.svg" href="#">Download SVG</a>
+          </span>
+        </p>
+      </section>
+
+      <section aria-labelledby="sizes">
+        <h2 id="sizes" class="eyebrow section-head">At the sizes it's shown</h2>
+        <div class="sizes">
+          <figure>
+            <div class="thumb art-host" style="width: 351px; aspect-ratio: 8 / 5" data-copy-of="main"></div>
+            <figcaption>Blog card, three-up · 351 × 219</figcaption>
+          </figure>
+          <figure>
+            <div class="thumb art-host" style="width: 240px; aspect-ratio: 8 / 5" data-copy-of="main"></div>
+            <figcaption>Narrow card · 240 × 150</figcaption>
+          </figure>
+          <figure>
+            <div class="thumb art-host" style="width: 104px; aspect-ratio: 1" data-copy-of="main"></div>
+            <figcaption>Phone list · 104 × 104</figcaption>
+          </figure>
+        </div>
+        <figure class="social">
+          <img data-social alt="The social card for this seed" width="600" height="315" />
+          <figcaption>
+            Social card at half size, as a phone shows it, from the real renderer (src/lib/og).
+            <label class="inline">Title <input type="text" value="An open frontier" data-social-title /></label>
+            <a data-social-full target="_blank" href="#">Full size</a>
+          </figcaption>
+        </figure>
+      </section>
+
+      <section aria-labelledby="styles">
+        <h2 id="styles" class="eyebrow section-head">This seed in every style</h2>
+        <ul class="tiles" data-styles></ul>
+      </section>
+
+      <section aria-labelledby="seeds">
+        <h2 id="seeds" class="eyebrow section-head">This style with other seeds</h2>
+        <ul class="tiles" data-seeds></ul>
+      </section>
+    </div>
+  </div>
+</PageLayout>
+
+<script>
+  import { coverArt, ART_KINDS, DEFAULT_SCREEN, type ArtKind, type Screen } from "../components/art/cover-art";
+
+  const lab = document.querySelector<HTMLElement>("[data-lab]")!;
+  const form = lab.querySelector<HTMLFormElement>("[data-controls]")!;
+  const $ = <T extends Element>(sel: string) => lab.querySelector<T>(sel)!;
+  const input = <T extends HTMLInputElement | HTMLSelectElement>(name: string) => form.elements.namedItem(name) as T;
+  const keys = Object.keys(DEFAULT_SCREEN) as (keyof Screen)[];
+
+  let uid = 0;
+  /** Pattern and gradient ids are per seed; make them per drawing so variants on one page don't share defs. */
+  const draw = (seed: string, kind: ArtKind | undefined, screen: Screen) => {
+    const n = uid++;
+    return coverArt(seed, kind, undefined, screen).replace(/\b(ground|fade)-/g, `$1-u${n}-`);
+  };
+
+  function read() {
+    const screen = { ...DEFAULT_SCREEN };
+    for (const k of keys) screen[k] = Number(input<HTMLInputElement>(k).value);
+    const kind = (input<HTMLSelectElement>("kind").value || undefined) as ArtKind | undefined;
+    return { seed: input<HTMLInputElement>("seed").value, kind, screen };
+  }
+
+  function syncLayers() {
+    for (const name of ["ground", "light", "rules", "accent", "subject", "phone"]) {
+      lab.classList.toggle(`no-${name}`, !input<HTMLInputElement>(name).checked);
+    }
+  }
+
+  function syncUrl(state: ReturnType<typeof read>) {
+    const q = new URLSearchParams({ seed: state.seed });
+    if (state.kind) q.set("kind", state.kind);
+    for (const k of keys) if (state.screen[k] !== DEFAULT_SCREEN[k]) q.set(k, String(state.screen[k]));
+    history.replaceState(null, "", `?${q}`);
+  }
+
+  function tile(svg: string, label: string, current: boolean, onPick: () => void) {
+    const li = document.createElement("li");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "tile";
+    b.setAttribute("aria-pressed", String(current));
+    b.innerHTML = `<span class="art-host">${svg}</span><span class="tile-label">${label}</span>`;
+    b.addEventListener("click", onPick);
+    li.append(b);
+    return li;
+  }
+
+  let socialTimer: number | undefined;
+  function updateSocial(state: ReturnType<typeof read>) {
+    clearTimeout(socialTimer);
+    socialTimer = window.setTimeout(() => {
+      const changed = Object.fromEntries(keys.filter((k) => state.screen[k] !== DEFAULT_SCREEN[k]).map((k) => [k, state.screen[k]]));
+      const q = new URLSearchParams({ seed: state.seed, title: $<HTMLInputElement>("[data-social-title]").value, eyebrow: "Blog · Preview" });
+      if (state.kind) q.set("kind", state.kind);
+      if (Object.keys(changed).length) q.set("screen", JSON.stringify(changed));
+      const src = `/dev/cover-art/card.png?${q}`;
+      $<HTMLImageElement>("[data-social]").src = src;
+      $<HTMLAnchorElement>("[data-social-full]").href = src;
+    }, 350);
+  }
+
+  let frame = 0;
+  function render() {
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => {
+      const state = read();
+      const { seed, kind, screen } = state;
+      for (const k of keys) $<HTMLOutputElement>(`[data-out="${k}"]`).value = String(screen[k]);
+
+      const svg = draw(seed, kind, screen);
+      const resolved = svg.match(/data-art="(\w+)"/)?.[1] as ArtKind;
+      $("[data-main]").innerHTML = svg;
+      lab.querySelectorAll("[data-copy-of]").forEach((el) => (el.innerHTML = draw(seed, kind, screen)));
+
+      const bytes = new Blob([svg]).size;
+      const dots = (svg.match(/h0/g) ?? []).length;
+      $("[data-meta]").textContent =
+        `${resolved}${kind ? "" : " (auto)"} · ${dots.toLocaleString()} dots · ${(bytes / 1024).toFixed(1)} KB inline`;
+      const dl = $<HTMLAnchorElement>("[data-download]");
+      if (dl.href.startsWith("blob:")) URL.revokeObjectURL(dl.href);
+      dl.href = URL.createObjectURL(new Blob([svg.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ')], { type: "image/svg+xml" }));
+      dl.download = `${seed || "cover"}-${resolved}.svg`;
+
+      $("[data-styles]").replaceChildren(
+        ...ART_KINDS.map((k) => tile(draw(seed, k, screen), k, k === resolved, () => { input<HTMLSelectElement>("kind").value = k; render(); })),
+      );
+      const base = seed || "seed";
+      $("[data-seeds]").replaceChildren(
+        ...Array.from({ length: 12 }, (_, i) => {
+          const s = `${base}-${i + 1}`;
+          return tile(draw(s, resolved, screen), s, false, () => { input<HTMLInputElement>("seed").value = s; input<HTMLSelectElement>("kind").value = resolved; render(); });
+        }),
+      );
+
+      syncUrl(state);
+      updateSocial(state);
+    });
+  }
+
+  // Restore from the URL.
+  const q = new URLSearchParams(location.search);
+  if (q.has("seed")) input<HTMLInputElement>("seed").value = q.get("seed")!;
+  if (q.has("kind")) input<HTMLSelectElement>("kind").value = q.get("kind")!;
+  for (const k of keys) if (q.has(k)) input<HTMLInputElement>(k).value = q.get(k)!;
+
+  form.addEventListener("input", (e) => {
+    const t = e.target as HTMLInputElement;
+    if (t.name === "post") return;
+    if (t.type === "checkbox") return syncLayers();
+    render();
+  });
+  input<HTMLSelectElement>("post").addEventListener("change", (e) => {
+    const sel = e.target as HTMLSelectElement;
+    const opt = sel.selectedOptions[0];
+    if (!sel.value) return;
+    input<HTMLInputElement>("seed").value = sel.value;
+    input<HTMLSelectElement>("kind").value = opt.dataset.art ?? "";
+    $<HTMLInputElement>("[data-social-title]").value = opt.textContent ?? "";
+    sel.value = "";
+    render();
+  });
+  $("[data-random]").addEventListener("click", () => {
+    input<HTMLInputElement>("seed").value = Math.random().toString(36).slice(2, 10);
+    render();
+  });
+  $("[data-reset]").addEventListener("click", () => {
+    for (const k of keys) input<HTMLInputElement>(k).value = String(DEFAULT_SCREEN[k]);
+    render();
+  });
+  $("[data-copy]").addEventListener("click", async (e) => {
+    const b = e.currentTarget as HTMLButtonElement;
+    await navigator.clipboard.writeText($("[data-main]").innerHTML);
+    b.textContent = "Copied";
+    setTimeout(() => (b.textContent = "Copy SVG"), 1200);
+  });
+  $("[data-social-title]").addEventListener("input", () => updateSocial(read()));
+
+  syncLayers();
+  render();
+</script>
+
+<style>
+  .lab { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--space-7); margin-top: var(--space-7); margin-bottom: var(--space-section); align-items: start; }
+  @media (max-width: 840px) { .lab { grid-template-columns: minmax(0, 1fr); } }
+
+  .controls { position: sticky; top: calc(var(--header-height) + var(--space-4)); display: grid; gap: var(--space-6); max-height: calc(100vh - var(--header-height) - var(--space-6)); overflow-y: auto; padding-right: var(--space-2); }
+  @media (max-width: 840px) { .controls { position: static; max-height: none; overflow: visible; } }
+  fieldset { display: grid; gap: var(--space-4); margin: 0; padding: 0; border: 0; min-width: 0; }
+  legend { padding: 0; margin-bottom: var(--space-3); }
+  .field { display: grid; gap: var(--space-2); font-size: var(--text-small); color: var(--soft); }
+  .row { display: flex; gap: var(--space-2); }
+  .row input { flex: 1; min-width: 0; }
+  input[type="text"], select {
+    font: 400 var(--text-small) / 1.4 var(--font-mono);
+    color: var(--fg);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 7px 9px;
+    border-radius: 0;
+  }
+  input[type="text"]:focus-visible, select:focus-visible { outline: 1px solid var(--fg); outline-offset: 0; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .slider { gap: var(--space-1); }
+  .slider-label { display: flex; justify-content: space-between; }
+  .slider output { font: 500 var(--text-micro) / 1.4 var(--font-mono); color: var(--fg); }
+  .help { font-size: var(--text-micro); line-height: 1.45; color: var(--dim); margin: 0; }
+  .slider .help { display: none; }
+  .slider:focus-within .help { display: block; }
+  .check { display: flex; gap: var(--space-2); align-items: center; font-size: var(--text-small); color: var(--soft); }
+  .check input { accent-color: var(--fg); }
+  .button.small { padding: 7px 10px; font-size: var(--text-micro); background: none; cursor: pointer; }
+
+  .results { display: grid; gap: var(--space-8); min-width: 0; }
+  .section-head { margin: 0 0 var(--space-4); }
+
+  .art-host { display: block; background: var(--bg); }
+  .art-host :global(svg.cover-art) { display: block; width: 100%; height: 100%; }
+  .stage { position: relative; aspect-ratio: 8 / 5; border: 1px solid var(--rule); }
+  .stage .art { position: absolute; inset: 0; }
+  .guides { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; fill: none; stroke: var(--dim); stroke-width: 1; }
+  .guides path, .guides .box { vector-effect: non-scaling-stroke; stroke-dasharray: 3 3; }
+  .guides .shade { fill: var(--fg); fill-opacity: 0.05; stroke: none; }
+  .guides text { fill: var(--dim); stroke: none; font: 500 6px var(--font-mono); letter-spacing: var(--tracking-micro); text-transform: uppercase; }
+  .no-subject [data-guide="subject"], .no-phone [data-guide="phone"] { display: none; }
+
+  .lab.no-ground :global(svg.cover-art > rect) { display: none; }
+  .lab.no-light :global(svg.cover-art > g:first-of-type) { display: none; }
+  .lab.no-rules :global(svg.cover-art > g:last-of-type) { display: none; }
+  .lab.no-accent :global(svg.cover-art) { --accent: var(--fg); }
+
+  .meta { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3); margin: var(--space-3) 0 0; font: 500 var(--text-micro) / 1.4 var(--font-mono); letter-spacing: var(--tracking-micro); text-transform: uppercase; color: var(--dim); }
+  .actions { display: flex; gap: var(--space-2); }
+
+  .sizes { display: flex; flex-wrap: wrap; gap: var(--space-6); align-items: end; }
+  figure { margin: 0; }
+  .thumb { max-width: 100%; overflow: hidden; border: 1px solid var(--rule); }
+  figcaption { margin-top: var(--space-2); font-size: var(--text-small); color: var(--soft); }
+  .social { margin-top: var(--space-6); }
+  .social img { display: block; width: 600px; max-width: 100%; height: auto; aspect-ratio: 1200 / 630; border: 1px solid var(--rule); background: var(--placeholder); }
+  .social figcaption { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); align-items: center; }
+  .inline { display: inline-flex; gap: var(--space-2); align-items: center; }
+  .inline input { width: 220px; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--space-4); margin: 0; padding: 0; list-style: none; }
+  .tiles :global(.tile) { display: block; width: 100%; padding: 0; border: 0; background: none; color: inherit; text-align: left; cursor: pointer; }
+  .tiles :global(.tile .art-host) { display: block; aspect-ratio: 8 / 5; border: 1px solid var(--rule); overflow: hidden; background: var(--bg); }
+  .tiles :global(.tile svg.cover-art) { display: block; width: 100%; height: 100%; }
+  .tiles :global(.tile:hover .art-host), .tiles :global(.tile[aria-pressed="true"] .art-host) { border-color: var(--fg); }
+  .tiles :global(.tile-label) { display: block; margin-top: var(--space-2); font: 500 var(--text-micro) / 1.4 var(--font-mono); letter-spacing: var(--tracking-micro); text-transform: uppercase; color: var(--dim); overflow-wrap: anywhere; }
+  .tiles :global(.tile[aria-pressed="true"] .tile-label) { color: var(--fg); }
+</style>
