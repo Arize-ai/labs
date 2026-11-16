@@ -142,10 +142,13 @@ function inPolygon(x: number, y: number, poly: Pt[]) {
   return inside;
 }
 
+/** Parts of the light that the dev explorer can switch off, to show it in stages. */
+const parts = { glow: true };
+
 /** 1 inside a shape of signed distance d, 0 outside, over a one-dot edge. */
 const solid = (d: number) => clamp(0.5 - d / P);
 /** Light falling off with distance d outside a shape, over w. */
-const glow = (d: number, w: number) => Math.exp(-Math.max(d, 0) / w);
+const glow = (d: number, w: number) => (parts.glow ? Math.exp(-Math.max(d, 0) / w) : 0);
 
 function bezier(a: Pt, b: Pt, n = 24): Pt[] {
   const dx = (b[0] - a[0]) * 0.5;
@@ -232,13 +235,12 @@ class Graphic {
   }
 
   /** The light that was printed, as unquantized ink and accent at any point. */
-  tone(x: number, y: number, raw = false): [ink: number, accent: number] {
+  tone(x: number, y: number, { fade = true, grain: grained = true } = {}): [ink: number, accent: number] {
     const v = this.light?.(x, y) ?? 0;
     let [ink, sig] = typeof v === "number" ? [v, 0] : v;
-    if (raw) return [clamp(ink), clamp(sig)];
     const { grain: grainAmount, edgeFadeX, edgeFadeY } = this.screen;
-    const edge = smooth(clamp(Math.min(x, W - x) / edgeFadeX)) * smooth(clamp(Math.min(y, H - y) / edgeFadeY));
-    const grain = (this.grain(x / 5, y / 5) - 0.5) * grainAmount;
+    const edge = fade ? smooth(clamp(Math.min(x, W - x) / edgeFadeX)) * smooth(clamp(Math.min(y, H - y) / edgeFadeY)) : 1;
+    const grain = grained ? (this.grain(x / 5, y / 5) - 0.5) * grainAmount : 0;
     ink = clamp(ink * edge + (ink > 0.02 ? grain : 0));
     sig = clamp(sig * edge);
     return [ink, sig];
@@ -670,13 +672,28 @@ export function coverArt(seed: string, kind?: ArtKind, view?: ViewBox, screen?: 
   return g.svg(k, view);
 }
 
+export interface ToneParts {
+  glow?: boolean;
+  fade?: boolean;
+  grain?: boolean;
+}
+
 /**
  * The same drawing before it is screened, for the dev explorer: the SVG, and
- * the continuous tone it printed. `raw` skips the edge fade and grain.
+ * the continuous tone it printed, optionally without its glow, edge fade or
+ * grain.
  */
 export function coverArtField(seed: string, kind?: ArtKind, screen?: Screen) {
   const { g, k } = draw(seed, kind, screen);
-  return { kind: k, svg: g.svg(k), tone: (x: number, y: number, raw = false) => g.tone(x, y, raw) };
+  const tone = (x: number, y: number, { glow = true, ...rest }: ToneParts = {}) => {
+    parts.glow = glow;
+    try {
+      return g.tone(x, y, rest);
+    } finally {
+      parts.glow = true;
+    }
+  };
+  return { kind: k, svg: g.svg(k), tone };
 }
 
 function draw(seed: string, kind?: ArtKind, screen?: Screen) {

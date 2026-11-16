@@ -22,6 +22,17 @@ const sliders = [
   { key: "groundRadius", label: "Ground dot radius", min: 0, max: 1.6, step: 0.05, help: "The faint dot matrix behind everything." },
   { key: "groundOpacity", label: "Ground opacity", min: 0, max: 0.6, step: 0.01, help: "The ground's ink. The social card always uses its own." },
 ] as const;
+
+const stages = [
+  { name: "Geometry", note: "The drawing's shapes, in its own 400 × 250 units: the outline of everything that will carry light, and the 1px rules. The rules are vectors and stay exactly like this to the end; everything else is light, a tone from 0 to 1 at every point." },
+  { name: "Fills", note: "Each shape's light as a flat tone in ink or orange, from its signed distance: full inside, falling to nothing across one dot at the edge. Tone says how dark: a model call is near full, a tool call faint. Some drawings add their own terms here, such as noise or a gradient." },
+  { name: "Glow", note: "Light spilling past each edge, falling off exponentially with distance. With this, the field is exactly what the drawing's light function returns." },
+  { name: "Edge fade", note: "The print multiplies the light by a fade toward the card's edges, so it never stops at a hard border. Set by the edge fade sliders." },
+  { name: "Grain", note: "A little noise added to lit areas so flat tone doesn't look mechanical. This continuous tone is what gets printed." },
+  { name: "Sampling", note: "The tone is read once per dot, at the centres of a 45° grid set by the pitch. Each sample is shown at full size with its tone as opacity: nothing between the samples survives." },
+  { name: "Dot size", note: "Each sample becomes a dot whose area tracks its tone, rounded to one of the levels. Samples below the cut-off are dropped, and where orange is brighter than ink the dot is orange." },
+  { name: "Ground", note: "The faint dot matrix behind everything, which shows wherever there is no light. This is what ships." },
+] as const;
 ---
 
 <PageLayout
@@ -30,7 +41,7 @@ const sliders = [
   intro="The generated post covers, drawn live by the same code the build runs. Any seed works; the seed is hashed, not read, so it varies the details of a style but never its subject."
   noindex
 >
-  <div class="lab" data-lab data-mode="halftone" data-default-screen={JSON.stringify(DEFAULT_SCREEN)}>
+  <div class="lab" data-lab data-pipeline={stages.length} data-notes={JSON.stringify(stages.map((st) => st.note))}>
     <form class="controls" data-controls>
       <fieldset>
         <legend class="eyebrow">Input</legend>
@@ -70,17 +81,8 @@ const sliders = [
       </fieldset>
 
       <fieldset>
-        <legend class="eyebrow">Print</legend>
-        <label class="check"><input type="radio" name="mode" value="halftone" checked /> Halftone (what ships)</label>
-        <label class="check"><input type="radio" name="mode" value="tone" /> Continuous tone</label>
-        <label class="check"><input type="radio" name="mode" value="raw" /> Raw light, before edge fade and grain</label>
-        <p class="help">The drawing defines light as a continuous field in its own 400 × 250 units. Printing samples that field once per dot and rounds it to a dot size; the rules are drawn separately as vectors.</p>
-      </fieldset>
-
-      <fieldset>
         <legend class="eyebrow">Layers</legend>
         <label class="check"><input type="checkbox" name="ground" checked /> Ground (dot matrix)</label>
-        <label class="check"><input type="checkbox" name="light" checked /> Light (halftone)</label>
         <label class="check"><input type="checkbox" name="rules" checked /> Structure (1px rules)</label>
         <label class="check"><input type="checkbox" name="accent" checked /> Signal orange</label>
       </fieldset>
@@ -96,10 +98,18 @@ const sliders = [
 
     <div class="results">
       <section class="stage-wrap" aria-label="Cover art">
+        <div class="pipeline" role="group" aria-label="Pipeline stage">
+          <button type="button" class="button small" data-step="-1" aria-label="Previous stage">←</button>
+          <ol class="steps">
+            {stages.map((st, i) => (
+              <li><button type="button" class="step" data-stage-pick={i + 1} aria-pressed={i === stages.length - 1 ? "true" : "false"}><span class="n">{i + 1}</span> {st.name}</button></li>
+            ))}
+          </ol>
+          <button type="button" class="button small" data-step="1" aria-label="Next stage">→</button>
+        </div>
         <div class="stage art-host" data-stage>
-          <div class="art" data-main></div>
           <canvas class="tone" data-field aria-hidden="true"></canvas>
-          <div class="art rules-only" data-rules aria-hidden="true"></div>
+          <div class="art" data-main></div>
           <svg class="guides" viewBox={`0 0 ${ART_BOX.width} ${ART_BOX.height}`} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
             <defs>
               <pattern id="samples" patternUnits="userSpaceOnUse" width="6.4" height="6.4" data-samples-pattern>
@@ -119,6 +129,7 @@ const sliders = [
             </g>
           </svg>
         </div>
+        <p class="stage-note" data-stage-note></p>
         <p class="meta">
           <span data-meta></span>
           <span class="actions">
@@ -190,8 +201,19 @@ const sliders = [
     return { seed: input<HTMLInputElement>("seed").value, kind, screen };
   }
 
+  const STAGES = lab.querySelectorAll<HTMLButtonElement>("[data-stage-pick]").length;
+  const notes = JSON.parse(lab.dataset.notes!) as string[];
+  let stageN = STAGES;
+  function setStage(n: number) {
+    stageN = Math.min(STAGES, Math.max(1, n));
+    lab.dataset.pipeline = String(stageN);
+    lab.querySelectorAll<HTMLButtonElement>("[data-stage-pick]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.stagePick) === stageN)));
+    $("[data-stage-note]").textContent = notes[stageN - 1];
+    renderField(read());
+  }
+
   function syncLayers() {
-    for (const name of ["ground", "light", "rules", "accent", "subject", "phone", "samples"]) {
+    for (const name of ["ground", "rules", "accent", "subject", "phone", "samples"]) {
       lab.classList.toggle(`no-${name}`, !input<HTMLInputElement>(name).checked);
     }
     renderField(read());
@@ -211,41 +233,74 @@ const sliders = [
   let fieldKey = "";
   let fieldJob = 0;
   /**
-   * The unscreened tone on a canvas: ink or accent at the same alpha the
-   * print would turn into dot size. It doesn't depend on the pitch or levels,
-   * only on the drawing, the edge fade and the grain.
+   * Stages 1–6 on a canvas under the SVG, whose rules stay on top. Stages 1–5
+   * paint the continuous field (ink or orange, tone as alpha) with more of
+   * the light switched on at each stage; stage 1 traces where it starts.
+   * Stage 6 paints one full-size dot per sample. Stages 7 and 8 are the SVG.
    */
   function renderField({ seed, kind, screen }: ReturnType<typeof read>) {
-    const mode = (form.elements.namedItem("mode") as RadioNodeList).value;
-    lab.dataset.mode = mode;
-    if (mode === "halftone") return;
+    if (stageN >= 7) return;
     const css = getComputedStyle(stage);
     const ink = rgb(css.getPropertyValue("--fg"));
     const accent = lab.classList.contains("no-accent") ? ink : rgb(css.getPropertyValue("--accent"));
-    const key = JSON.stringify([seed, kind, screen.grain, screen.edgeFadeX, screen.edgeFadeY, mode, ink, accent]);
+    const key = JSON.stringify([seed, kind, screen, stageN, ink, accent]);
     if (key === fieldKey) return;
     fieldKey = key;
     const job = ++fieldJob;
     const field = coverArtField(seed, kind, screen);
-    const raw = mode === "raw";
+    const parts = { glow: stageN >= 3, fade: stageN >= 4, grain: stageN >= 5 };
+    const ctx = canvas.getContext("2d")!;
+
+    if (stageN === 6) {
+      const scale = 3, p = screen.pitch, r = p * screen.fullTone * scale;
+      canvas.width = ART_BOX.width * scale;
+      canvas.height = ART_BOX.height * scale;
+      const cols = Math.round(ART_BOX.width / p), rows = Math.round(ART_BOX.height / p);
+      for (let j = 0; j < rows; j++) {
+        for (let i = j & 1; i < cols; i += 2) {
+          const [inkT, sigT] = field.tone((i + 0.5) * p, (j + 0.5) * p, parts);
+          const [c, t] = sigT > inkT ? [accent, sigT] : [ink, inkT];
+          if (t <= 0) continue;
+          ctx.fillStyle = `rgb(${c[0]} ${c[1]} ${c[2]} / ${t})`;
+          ctx.beginPath();
+          ctx.arc((i + 0.5) * p * scale, (j + 0.5) * p * scale, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      return;
+    }
+
     const paint = (scale: number, rowsPerFrame: number) => {
       const w = ART_BOX.width * scale, h = ART_BOX.height * scale;
-      const img = new ImageData(w, h);
+      const tone = new Float32Array(w * h), isSig = new Uint8Array(w * h);
       let row = 0;
       const step = () => {
         if (job !== fieldJob) return;
         for (const end = Math.min(h, row + rowsPerFrame); row < end; row++) {
           for (let px = 0; px < w; px++) {
-            const [i, a] = field.tone((px + 0.5) / scale, (row + 0.5) / scale, raw);
-            const [c, t] = a > i ? [accent, a] : [ink, i];
-            const o = (row * w + px) * 4;
-            img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = Math.round(t * 255);
+            const [i, a] = field.tone((px + 0.5) / scale, (row + 0.5) / scale, parts);
+            const o = row * w + px;
+            tone[o] = Math.max(i, a);
+            isSig[o] = a > i ? 1 : 0;
           }
         }
         if (row < h) return void requestAnimationFrame(step);
+        const img = new ImageData(w, h);
+        // Geometry: an outline wherever the fill starts, at any tone.
+        const lit = (o: number) => tone[o] > 0.03;
+        for (let o = 0; o < w * h; o++) {
+          let t = tone[o];
+          if (stageN === 1) {
+            const x = o % w;
+            const edge = lit(o) && ((x > 0 && !lit(o - 1)) || (x < w - 1 && !lit(o + 1)) || (o >= w && !lit(o - w)) || (o < w * (h - 1) && !lit(o + w)));
+            t = edge ? 1 : 0;
+          }
+          const c = isSig[o] ? accent : ink;
+          img.data[o * 4] = c[0]; img.data[o * 4 + 1] = c[1]; img.data[o * 4 + 2] = c[2]; img.data[o * 4 + 3] = Math.round(t * 255);
+        }
         canvas.width = w;
         canvas.height = h;
-        canvas.getContext("2d")!.putImageData(img, 0, 0);
+        ctx.putImageData(img, 0, 0);
         if (scale === 1) paint(2, 20);
       };
       step();
@@ -258,6 +313,7 @@ const sliders = [
     const q = new URLSearchParams({ seed: state.seed });
     if (state.kind) q.set("kind", state.kind);
     for (const k of keys) if (state.screen[k] !== DEFAULT_SCREEN[k]) q.set(k, String(state.screen[k]));
+    if (stageN !== STAGES) q.set("stage", String(stageN));
     history.replaceState(null, "", `?${q}`);
   }
 
@@ -298,7 +354,6 @@ const sliders = [
       const svg = draw(seed, kind, screen);
       const resolved = svg.match(/data-art="(\w+)"/)?.[1] as ArtKind;
       $("[data-main]").innerHTML = svg;
-      $("[data-rules]").innerHTML = draw(seed, kind, screen);
       const p = screen.pitch;
       const pattern = $<SVGPatternElement>("[data-samples-pattern]");
       pattern.setAttribute("width", String(2 * p));
@@ -356,6 +411,8 @@ const sliders = [
     sel.value = "";
     render();
   });
+  lab.querySelectorAll<HTMLButtonElement>("[data-stage-pick]").forEach((b) => b.addEventListener("click", () => setStage(Number(b.dataset.stagePick))));
+  lab.querySelectorAll<HTMLButtonElement>("[data-step]").forEach((b) => b.addEventListener("click", () => setStage(stageN + Number(b.dataset.step))));
   $("[data-random]").addEventListener("click", () => {
     input<HTMLInputElement>("seed").value = Math.random().toString(36).slice(2, 10);
     render();
@@ -373,6 +430,7 @@ const sliders = [
   $("[data-social-title]").addEventListener("input", () => updateSocial(read()));
 
   syncLayers();
+  setStage(Number(q.get("stage")) || STAGES);
   render();
 </script>
 
@@ -421,15 +479,22 @@ const sliders = [
   .guides text { fill: var(--dim); stroke: none; font: 500 6px var(--font-mono); letter-spacing: var(--tracking-micro); text-transform: uppercase; }
   .no-subject [data-guide="subject"], .no-phone [data-guide="phone"], .no-samples [data-guide="samples"] { display: none; }
   .guides pattern circle { fill: var(--accent); stroke: none; }
-  .tone { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
-  .rules-only { display: none; }
-  .rules-only :global(svg > rect), .rules-only :global(svg > g:first-of-type) { display: none; }
-  .lab:not([data-mode="halftone"]) .tone, .lab:not([data-mode="halftone"]) .rules-only { display: block; }
-  .lab:not([data-mode="halftone"]) [data-main] :global(svg > g) { display: none; }
-  .lab.no-light .tone { display: none; }
+  .tone { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .lab[data-pipeline="7"] .tone, .lab[data-pipeline="8"] .tone { display: none; }
+  .lab:not([data-pipeline="7"], [data-pipeline="8"]) [data-main] :global(svg > g:first-of-type) { display: none; }
+  .lab:not([data-pipeline="8"]) [data-main] :global(svg > rect) { display: none; }
+
+  .pipeline { display: flex; gap: var(--space-2); align-items: stretch; margin-bottom: var(--space-3); }
+  .steps { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); flex: 1; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  .step { width: 100%; height: 100%; padding: 6px 4px; border: 1px solid var(--rule); background: none; color: var(--dim); font: 500 var(--text-micro) / 1.3 var(--font-mono); letter-spacing: var(--tracking-micro); text-transform: uppercase; cursor: pointer; }
+  .step .n { display: block; color: var(--fg); }
+  .step:hover { border-color: var(--fg); }
+  .step[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+  .step[aria-pressed="true"] .n { color: var(--accent); }
+  @media (max-width: 720px) { .steps { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .stage-note { max-width: var(--prose-max); margin: var(--space-3) 0 0; font-size: var(--text-small); color: var(--soft); min-height: 3em; }
 
   .lab.no-ground :global(svg.cover-art > rect) { display: none; }
-  .lab.no-light :global(svg.cover-art > g:first-of-type) { display: none; }
   .lab.no-rules :global(svg.cover-art > g:last-of-type) { display: none; }
   .lab.no-accent :global(svg.cover-art) { --accent: var(--fg); }
 
