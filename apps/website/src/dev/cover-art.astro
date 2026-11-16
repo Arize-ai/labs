@@ -24,7 +24,7 @@ const sliders = [
 ] as const;
 
 const stages = [
-  { name: "Geometry", note: "The drawing's two kinds of geometry, in its own 400 × 250 units. Shapes carry light: from here on they are a tone from 0 to 1 at every point, which ends up as dots. Rules are 1px vectors and stay exactly like this to the end. Some drawings shape their light with noise or gradients rather than edges; their outlines here trace that light instead." },
+  { name: "Geometry", note: "The drawing's two kinds of geometry, in its own 400 × 250 units. Shapes carry light: from here on they are a tone from 0 to 1 at every point, which ends up as dots. Each is filled in blue (orange for orange light) at its tone, cut off exactly at its edge; shapes are never stroked, so where one meets another the only boundary is the change in tone. Rules are 1px vectors, in magenta here but at their real weight and dash, and they stay exactly like this to the end. Point at the drawing to read the tone and rules under the cursor. Some drawings shape their light with noise or gradients rather than edges; their outlines here trace that light instead." },
   { name: "Fills", note: "Each shape's light as a flat tone in ink or orange, from its signed distance: full inside, falling to nothing across one dot at the edge. Tone says how dark: a model call is near full, a tool call faint. Some drawings add their own terms here, such as noise or a gradient." },
   { name: "Glow", note: "Light spilling past each edge, falling off exponentially with distance. With this, the field is exactly what the drawing's light function returns." },
   { name: "Edge fade", note: "The print multiplies the light by a fade toward the card's edges, so it never stops at a hard border. Set by the edge fade sliders." },
@@ -110,6 +110,7 @@ const stages = [
         <div class="stage art-host" data-stage>
           <canvas class="tone" data-field aria-hidden="true"></canvas>
           <div class="art" data-main></div>
+          <p class="probe" data-probe hidden></p>
           <svg class="guides" viewBox={`0 0 ${ART_BOX.width} ${ART_BOX.height}`} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
             <defs>
               <pattern id="samples" patternUnits="userSpaceOnUse" width="6.4" height="6.4" data-samples-pattern>
@@ -131,9 +132,10 @@ const stages = [
         </div>
         <p class="stage-note" data-stage-note></p>
         <ul class="legend" aria-label="Geometry key">
-          <li><span class="swatch shape"></span> Shape that carries ink light</li>
+          <li><span class="swatch shape"></span> Shape that carries ink light, filled at its tone</li>
           <li><span class="swatch shape-accent"></span> Shape that carries orange light</li>
           <li><span class="swatch rule"></span> Rule (1px vector)</li>
+          <li><span class="swatch rule weak"></span> Weaker or dashed rule, as printed</li>
         </ul>
         <p class="meta">
           <span data-meta></span>
@@ -257,7 +259,7 @@ const stages = [
   /**
    * Stages 1–6 paint a canvas under the SVG, whose rules stay on top. Stages
    * 1–5 are the continuous field (ink or orange, tone as alpha) with more of
-   * the light switched on at each stage; stage 1 traces where it starts.
+   * the light switched on at each stage; stage 1 cuts each shape off hard at its edge.
    * Stage 6 is one full-size dot per sample. Stages 7 and 8 are the SVG
    * alone. Until a new canvas is ready the previous stage stays up.
    */
@@ -317,15 +319,8 @@ const stages = [
       }
       if (row < h) return void requestAnimationFrame(step);
       const img = new ImageData(w, h);
-      // Geometry: each shape outlined at its edge and tinted, whatever its tone.
-      const lit = (o: number) => tone[o] > 0.03;
       for (let o = 0; o < w * h; o++) {
-        let t = tone[o];
-        if (n === 1) {
-          const x = o % w;
-          const edge = lit(o) && ((x > 0 && !lit(o - 1)) || (x < w - 1 && !lit(o + 1)) || (o >= w && !lit(o - w)) || (o < w * (h - 1) && !lit(o + w)));
-          t = edge ? 1 : lit(o) ? 0.1 : 0;
-        }
+        const t = tone[o];
         const c = isSig[o] ? accent : ink;
         img.data[o * 4] = c[0]; img.data[o * 4 + 1] = c[1]; img.data[o * 4 + 2] = c[2]; img.data[o * 4 + 3] = Math.round(t * 255);
       }
@@ -333,6 +328,33 @@ const stages = [
     };
     step();
   }
+  /** Stage 1's readout: the shape tone and the rules under the pointer. */
+  const probeEl = $<HTMLElement>("[data-probe]");
+  const hit = document.createElement("canvas").getContext("2d")!;
+  let probe: { svg: string; field: ReturnType<typeof coverArtField>; rules: Path2D[] } | undefined;
+  function readProbe(e: PointerEvent) {
+    if (stageN !== 1 || !ready) return void (probeEl.hidden = true);
+    const { state: { seed, kind, screen }, svg } = current;
+    if (probe?.svg !== svg) {
+      const rules = [...$("[data-main]").querySelectorAll("svg > g:last-of-type path")].map((el) => new Path2D(el.getAttribute("d") ?? ""));
+      probe = { svg, field: coverArtField(seed, kind, screen), rules };
+    }
+    const box = stage.getBoundingClientRect();
+    const x = ((e.clientX - box.left) / box.width) * ART_BOX.width, y = ((e.clientY - box.top) / box.height) * ART_BOX.height;
+    const [ink, sig] = probe.field.tone(x, y, { glow: false, fade: false, grain: false, hardEdges: true });
+    hit.lineWidth = 3;
+    const rules = lab.classList.contains("no-rules") ? 0 : probe.rules.filter((r) => hit.isPointInStroke(r, x, y)).length;
+    const parts = [`${Math.round(x)}, ${Math.round(y)}`];
+    if (ink > 0) parts.push(`ink ${ink.toFixed(2)}`);
+    if (sig > 0) parts.push(`orange ${sig.toFixed(2)}`);
+    if (!ink && !sig) parts.push("no light");
+    if (rules) parts.push(rules > 1 ? `${rules} rules` : "rule");
+    probeEl.textContent = parts.join(" · ");
+    probeEl.hidden = false;
+  }
+  stage.addEventListener("pointermove", readProbe);
+  stage.addEventListener("pointerleave", () => (probeEl.hidden = true));
+
   new MutationObserver(showStage).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
   /** Every control lives in the URL (defaults left out), so a refresh or a link restores the page. */
@@ -533,16 +555,21 @@ const stages = [
    * The geometry stage leaves the palette on purpose, so shapes and rules
    * read as different things at a glance.
    */
-  .lab { --lab-shape: var(--fg); --lab-shape-accent: var(--accent); --lab-rule: #1f7ae0; }
-  :global(:root[data-theme="dark"]) .lab { --lab-rule: #5aa8ff; }
-  .lab[data-pipeline="1"] [data-main] :global(svg > g:last-of-type path) { stroke: var(--lab-rule) !important; stroke-opacity: 1 !important; }
+  .lab { --lab-shape: #1f7ae0; --lab-shape-accent: var(--accent); --lab-rule: #ff00ff; }
+  :global(:root[data-theme="dark"]) .lab { --lab-shape: #5aa8ff; }
+  /* Only the colour changes: each rule keeps its own opacity, dash and fill. Fading rules are stroked with a gradient, so their stops are recoloured instead. */
+  .lab[data-pipeline="1"] [data-main] :global(svg > g:last-of-type path:not([stroke])) { stroke: var(--lab-rule) !important; }
+  .lab[data-pipeline="1"] [data-main] :global(svg > defs linearGradient stop) { stop-color: var(--lab-rule) !important; }
+  .probe { position: absolute; top: var(--space-2); left: var(--space-3); margin: 0; padding: 2px 6px; background: var(--bg); font: 500 var(--text-micro) / 1.4 var(--font-mono); letter-spacing: var(--tracking-micro); text-transform: uppercase; color: var(--fg); pointer-events: none; }
+  .lab:not([data-pipeline="1"]) .probe { display: none; }
   .legend { display: none; gap: var(--space-2) var(--space-5); flex-wrap: wrap; margin: var(--space-2) 0 0; padding: 0; list-style: none; font-size: var(--text-small); color: var(--soft); }
   .lab[data-pipeline="1"] .legend { display: flex; }
   .legend li { display: flex; gap: var(--space-2); align-items: center; }
-  .swatch { width: 18px; height: 10px; border: 1.5px solid; }
-  .swatch.shape { border-color: var(--lab-shape); background: color-mix(in srgb, var(--lab-shape) 10%, transparent); }
-  .swatch.shape-accent { border-color: var(--lab-shape-accent); background: color-mix(in srgb, var(--lab-shape-accent) 10%, transparent); }
-  .swatch.rule { height: 0; border-width: 1.5px 0 0; border-color: var(--lab-rule); }
+  .swatch { width: 18px; height: 10px; }
+  .swatch.shape { background: linear-gradient(to right, color-mix(in srgb, var(--lab-shape) 20%, transparent) 0 50%, var(--lab-shape) 50%); }
+  .swatch.shape-accent { background: var(--lab-shape-accent); }
+  .swatch.rule { height: 0; border-width: 1.5px 0 0; border-style: solid; border-color: var(--lab-rule); }
+  .swatch.rule.weak { border-style: dashed; opacity: 0.45; }
   .stage-note { max-width: var(--prose-max); margin: var(--space-3) 0 0; font-size: var(--text-small); color: var(--soft); min-height: 3em; }
 
   .lab.no-ground :global(svg.cover-art > rect) { display: none; }
