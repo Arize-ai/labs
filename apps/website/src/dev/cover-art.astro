@@ -203,25 +203,30 @@ const stages = [
 
   const STAGES = lab.querySelectorAll<HTMLButtonElement>("[data-stage-pick]").length;
   const notes = JSON.parse(lab.dataset.notes!) as string[];
+  const TOGGLES = ["ground", "rules", "accent", "subject", "phone", "samples"];
   let stageN = STAGES;
+  /** The latest full drawing; render() sets it, and a stage shows it once its canvas is ready. */
+  let current = { state: read(), svg: "" };
+  /** Off until the URL has been restored and the first render() runs. */
+  let ready = false;
+
   function setStage(n: number) {
     stageN = Math.min(STAGES, Math.max(1, n));
-    lab.dataset.pipeline = String(stageN);
     lab.querySelectorAll<HTMLButtonElement>("[data-stage-pick]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.stagePick) === stageN)));
     $("[data-stage-note]").textContent = notes[stageN - 1];
-    renderField(read());
+    showStage();
+    syncUrl();
   }
 
   function syncLayers() {
-    for (const name of ["ground", "rules", "accent", "subject", "phone", "samples"]) {
-      lab.classList.toggle(`no-${name}`, !input<HTMLInputElement>(name).checked);
-    }
-    renderField(read());
+    for (const name of TOGGLES) lab.classList.toggle(`no-${name}`, !input<HTMLInputElement>(name).checked);
+    showStage();
+    syncUrl();
   }
 
   const stage = $<HTMLElement>("[data-stage]");
   const canvas = $<HTMLCanvasElement>("[data-field]");
-  const swatch = document.createElement("canvas").getContext("2d")!;
+  const swatch = document.createElement("canvas").getContext("2d", { willReadFrequently: true })!;
   function rgb(color: string): [number, number, number] {
     swatch.fillStyle = "#000";
     swatch.fillStyle = color.trim();
@@ -230,31 +235,53 @@ const stages = [
     return [r, g, b];
   }
 
-  let fieldKey = "";
-  let fieldJob = 0;
+  /** Swaps the SVG, the canvas and the stage's CSS in together, so no stage shows half drawn. */
+  function commit(n: number, svg: string, image?: ImageData) {
+    if (image) {
+      canvas.width = image.width;
+      canvas.height = image.height;
+      canvas.getContext("2d")!.putImageData(image, 0, 0);
+    }
+    $("[data-main]").innerHTML = svg;
+    lab.dataset.pipeline = String(n);
+    delete lab.dataset.pending;
+  }
+
+  const cache = new Map<string, ImageData>();
+  let job = 0;
   /**
-   * Stages 1–6 on a canvas under the SVG, whose rules stay on top. Stages 1–5
-   * paint the continuous field (ink or orange, tone as alpha) with more of
+   * Stages 1–6 paint a canvas under the SVG, whose rules stay on top. Stages
+   * 1–5 are the continuous field (ink or orange, tone as alpha) with more of
    * the light switched on at each stage; stage 1 traces where it starts.
-   * Stage 6 paints one full-size dot per sample. Stages 7 and 8 are the SVG.
+   * Stage 6 is one full-size dot per sample. Stages 7 and 8 are the SVG
+   * alone. Until a new canvas is ready the previous stage stays up.
    */
-  function renderField({ seed, kind, screen }: ReturnType<typeof read>) {
-    if (stageN >= 7) return;
+  function showStage() {
+    if (!ready) return;
+    const { state: { seed, kind, screen }, svg } = current;
+    const n = stageN;
+    const mine = ++job;
+    if (n >= 7) return commit(n, svg);
     const css = getComputedStyle(stage);
     const ink = rgb(css.getPropertyValue("--fg"));
     const accent = lab.classList.contains("no-accent") ? ink : rgb(css.getPropertyValue("--accent"));
-    const key = JSON.stringify([seed, kind, screen, stageN, ink, accent]);
-    if (key === fieldKey) return;
-    fieldKey = key;
-    const job = ++fieldJob;
-    const field = coverArtField(seed, kind, screen);
-    const parts = { glow: stageN >= 3, fade: stageN >= 4, grain: stageN >= 5 };
-    const ctx = canvas.getContext("2d")!;
+    const key = JSON.stringify([seed, kind, screen, n, ink, accent]);
+    const hit = cache.get(key);
+    if (hit) return commit(n, svg, hit);
 
-    if (stageN === 6) {
+    lab.dataset.pending = "";
+    const field = coverArtField(seed, kind, screen);
+    const parts = { glow: n >= 3, fade: n >= 4, grain: n >= 5 };
+    const done = (image: ImageData) => {
+      if (cache.size > 24) cache.delete(cache.keys().next().value!);
+      cache.set(key, image);
+      if (mine === job) commit(n, svg, image);
+    };
+
+    if (n === 6) {
       const scale = 3, p = screen.pitch, r = p * screen.fullTone * scale;
-      canvas.width = ART_BOX.width * scale;
-      canvas.height = ART_BOX.height * scale;
+      const off = new OffscreenCanvas(ART_BOX.width * scale, ART_BOX.height * scale);
+      const ctx = off.getContext("2d")!;
       const cols = Math.round(ART_BOX.width / p), rows = Math.round(ART_BOX.height / p);
       for (let j = 0; j < rows; j++) {
         for (let i = j & 1; i < cols; i += 2) {
@@ -267,58 +294,54 @@ const stages = [
           ctx.fill();
         }
       }
-      return;
+      return done(ctx.getImageData(0, 0, off.width, off.height));
     }
 
-    const paint = (scale: number, rowsPerFrame: number) => {
-      const w = ART_BOX.width * scale, h = ART_BOX.height * scale;
-      const tone = new Float32Array(w * h), isSig = new Uint8Array(w * h);
-      let row = 0;
-      const step = () => {
-        if (job !== fieldJob) return;
-        for (const end = Math.min(h, row + rowsPerFrame); row < end; row++) {
-          for (let px = 0; px < w; px++) {
-            const [i, a] = field.tone((px + 0.5) / scale, (row + 0.5) / scale, parts);
-            const o = row * w + px;
-            tone[o] = Math.max(i, a);
-            isSig[o] = a > i ? 1 : 0;
-          }
+    const scale = 2, w = ART_BOX.width * scale, h = ART_BOX.height * scale;
+    const tone = new Float32Array(w * h), isSig = new Uint8Array(w * h);
+    let row = 0;
+    const step = () => {
+      if (mine !== job) return;
+      for (const end = Math.min(h, row + 25); row < end; row++) {
+        for (let px = 0; px < w; px++) {
+          const [i, a] = field.tone((px + 0.5) / scale, (row + 0.5) / scale, parts);
+          const o = row * w + px;
+          tone[o] = Math.max(i, a);
+          isSig[o] = a > i ? 1 : 0;
         }
-        if (row < h) return void requestAnimationFrame(step);
-        const img = new ImageData(w, h);
-        // Geometry: an outline wherever the fill starts, at any tone.
-        const lit = (o: number) => tone[o] > 0.03;
-        for (let o = 0; o < w * h; o++) {
-          let t = tone[o];
-          if (stageN === 1) {
-            const x = o % w;
-            const edge = lit(o) && ((x > 0 && !lit(o - 1)) || (x < w - 1 && !lit(o + 1)) || (o >= w && !lit(o - w)) || (o < w * (h - 1) && !lit(o + w)));
-            t = edge ? 1 : 0;
-          }
-          const c = isSig[o] ? accent : ink;
-          img.data[o * 4] = c[0]; img.data[o * 4 + 1] = c[1]; img.data[o * 4 + 2] = c[2]; img.data[o * 4 + 3] = Math.round(t * 255);
+      }
+      if (row < h) return void requestAnimationFrame(step);
+      const img = new ImageData(w, h);
+      // Geometry: an outline wherever the fill starts, at any tone.
+      const lit = (o: number) => tone[o] > 0.03;
+      for (let o = 0; o < w * h; o++) {
+        let t = tone[o];
+        if (n === 1) {
+          const x = o % w;
+          const edge = lit(o) && ((x > 0 && !lit(o - 1)) || (x < w - 1 && !lit(o + 1)) || (o >= w && !lit(o - w)) || (o < w * (h - 1) && !lit(o + w)));
+          t = edge ? 1 : 0;
         }
-        canvas.width = w;
-        canvas.height = h;
-        ctx.putImageData(img, 0, 0);
-        if (scale === 1) paint(2, 20);
-      };
-      step();
+        const c = isSig[o] ? accent : ink;
+        img.data[o * 4] = c[0]; img.data[o * 4 + 1] = c[1]; img.data[o * 4 + 2] = c[2]; img.data[o * 4 + 3] = Math.round(t * 255);
+      }
+      done(img);
     };
-    // Soft fields get a quick coarse pass first. Outlines don't: upscaled,
-    // they look thicker until the sharp pass replaces them.
-    if (stageN === 1) {
-      canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
-      paint(2, 20);
-    } else paint(1, Infinity);
+    step();
   }
-  new MutationObserver(() => { fieldKey = ""; renderField(read()); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  new MutationObserver(showStage).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
-  function syncUrl(state: ReturnType<typeof read>) {
-    const q = new URLSearchParams({ seed: state.seed });
-    if (state.kind) q.set("kind", state.kind);
-    for (const k of keys) if (state.screen[k] !== DEFAULT_SCREEN[k]) q.set(k, String(state.screen[k]));
+  /** Every control lives in the URL (defaults left out), so a refresh or a link restores the page. */
+  function syncUrl() {
+    if (!ready) return;
+    const { seed, kind, screen } = current.state;
+    const q = new URLSearchParams({ seed });
+    if (kind) q.set("kind", kind);
+    for (const k of keys) if (screen[k] !== DEFAULT_SCREEN[k]) q.set(k, String(screen[k]));
     if (stageN !== STAGES) q.set("stage", String(stageN));
+    const flipped = TOGGLES.filter((t) => input<HTMLInputElement>(t).checked !== input<HTMLInputElement>(t).defaultChecked);
+    if (flipped.length) q.set("toggle", flipped.join(","));
+    const title = $<HTMLInputElement>("[data-social-title]");
+    if (title.value !== title.defaultValue) q.set("title", title.value);
     history.replaceState(null, "", `?${q}`);
   }
 
@@ -358,7 +381,7 @@ const stages = [
 
       const svg = draw(seed, kind, screen);
       const resolved = svg.match(/data-art="(\w+)"/)?.[1] as ArtKind;
-      $("[data-main]").innerHTML = svg;
+      current = { state, svg };
       const p = screen.pitch;
       const pattern = $<SVGPatternElement>("[data-samples-pattern]");
       pattern.setAttribute("width", String(2 * p));
@@ -366,7 +389,7 @@ const stages = [
       const [c1, c2] = pattern.querySelectorAll("circle");
       c1.setAttribute("cx", String(p / 2)); c1.setAttribute("cy", String(p / 2));
       c2.setAttribute("cx", String(1.5 * p)); c2.setAttribute("cy", String(1.5 * p));
-      renderField(state);
+      showStage();
       lab.querySelectorAll("[data-copy-of]").forEach((el) => (el.innerHTML = draw(seed, kind, screen)));
 
       const bytes = new Blob([svg]).size;
@@ -389,7 +412,7 @@ const stages = [
         }),
       );
 
-      syncUrl(state);
+      syncUrl();
       updateSocial(state);
     });
   }
@@ -399,6 +422,8 @@ const stages = [
   if (q.has("seed")) input<HTMLInputElement>("seed").value = q.get("seed")!;
   if (q.has("kind")) input<HTMLSelectElement>("kind").value = q.get("kind")!;
   for (const k of keys) if (q.has(k)) input<HTMLInputElement>(k).value = q.get(k)!;
+  for (const t of q.get("toggle")?.split(",") ?? []) if (TOGGLES.includes(t)) input<HTMLInputElement>(t).checked = !input<HTMLInputElement>(t).defaultChecked;
+  if (q.has("title")) $<HTMLInputElement>("[data-social-title]").value = q.get("title")!;
 
   form.addEventListener("input", (e) => {
     const t = e.target as HTMLInputElement;
@@ -412,7 +437,7 @@ const stages = [
     if (!sel.value) return;
     input<HTMLInputElement>("seed").value = sel.value;
     input<HTMLSelectElement>("kind").value = opt.dataset.art ?? "";
-    $<HTMLInputElement>("[data-social-title]").value = opt.textContent ?? "";
+    $<HTMLInputElement>("[data-social-title]").value = opt.textContent?.trim() ?? "";
     sel.value = "";
     render();
   });
@@ -432,10 +457,11 @@ const stages = [
     b.textContent = "Copied";
     setTimeout(() => (b.textContent = "Copy SVG"), 1200);
   });
-  $("[data-social-title]").addEventListener("input", () => updateSocial(read()));
+  $("[data-social-title]").addEventListener("input", () => { updateSocial(read()); syncUrl(); });
 
   syncLayers();
   setStage(Number(q.get("stage")) || STAGES);
+  ready = true;
   render();
 </script>
 
@@ -497,6 +523,7 @@ const stages = [
   .step[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
   .step[aria-pressed="true"] .n { color: var(--accent); }
   @media (max-width: 720px) { .steps { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .lab[data-pending] .stage::after { content: "Drawing…"; position: absolute; top: var(--space-2); right: var(--space-3); font: 500 var(--text-micro) / 1.4 var(--font-mono); letter-spacing: var(--tracking-micro); text-transform: uppercase; color: var(--dim); }
   .stage-note { max-width: var(--prose-max); margin: var(--space-3) 0 0; font-size: var(--text-small); color: var(--soft); min-height: 3em; }
 
   .lab.no-ground :global(svg.cover-art > rect) { display: none; }
