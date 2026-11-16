@@ -98,7 +98,7 @@ const sliders = [
       <section class="stage-wrap" aria-label="Cover art">
         <div class="stage art-host" data-stage>
           <div class="art" data-main></div>
-          <canvas class="field" data-field aria-hidden="true"></canvas>
+          <canvas class="tone" data-field aria-hidden="true"></canvas>
           <div class="art rules-only" data-rules aria-hidden="true"></div>
           <svg class="guides" viewBox={`0 0 ${ART_BOX.width} ${ART_BOX.height}`} preserveAspectRatio="xMidYMid slice" aria-hidden="true">
             <defs>
@@ -386,7 +386,8 @@ const sliders = [
   legend { padding: 0; margin-bottom: var(--space-3); }
   .field { display: grid; gap: var(--space-2); font-size: var(--text-small); color: var(--soft); }
   .row { display: flex; gap: var(--space-2); }
-  .row input { flex: 1; min-width: 0; }
+  .field input[type="text"], .field select { box-sizing: border-box; width: 100%; min-width: 0; }
+  .row input[type="text"] { flex: 1; width: auto; }
   input[type="text"], select {
     font: 400 var(--text-small) / 1.4 var(--font-mono);
     color: var(--fg);
@@ -420,12 +421,12 @@ const sliders = [
   .guides text { fill: var(--dim); stroke: none; font: 500 6px var(--font-mono); letter-spacing: var(--tracking-micro); text-transform: uppercase; }
   .no-subject [data-guide="subject"], .no-phone [data-guide="phone"], .no-samples [data-guide="samples"] { display: none; }
   .guides pattern circle { fill: var(--accent); stroke: none; }
-  .field { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
+  .tone { position: absolute; inset: 0; width: 100%; height: 100%; display: none; }
   .rules-only { display: none; }
   .rules-only :global(svg > rect), .rules-only :global(svg > g:first-of-type) { display: none; }
-  .lab:not([data-mode="halftone"]) .field, .lab:not([data-mode="halftone"]) .rules-only { display: block; }
+  .lab:not([data-mode="halftone"]) .tone, .lab:not([data-mode="halftone"]) .rules-only { display: block; }
   .lab:not([data-mode="halftone"]) [data-main] :global(svg > g) { display: none; }
-  .lab.no-light .field { display: none; }
+  .lab.no-light .tone { display: none; }
 
   .lab.no-ground :global(svg.cover-art > rect) { display: none; }
   .lab.no-light :global(svg.cover-art > g:first-of-type) { display: none; }
