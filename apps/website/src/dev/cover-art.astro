@@ -305,7 +305,12 @@ const stages = [
       };
       step();
     };
-    paint(1, Infinity);
+    // Soft fields get a quick coarse pass first. Outlines don't: upscaled,
+    // they look thicker until the sharp pass replaces them.
+    if (stageN === 1) {
+      canvas.getContext("2d")!.clearRect(0, 0, canvas.width, canvas.height);
+      paint(2, 20);
+    } else paint(1, Infinity);
   }
   new MutationObserver(() => { fieldKey = ""; renderField(read()); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
