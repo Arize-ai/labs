@@ -35,8 +35,8 @@ import { unified } from "unified";
 
 /**
  * The route of a page's markdown copy, by the page's route:
- * `/website/blog/a-post` → `/website/blog/a-post.md`,
- * `/website/` → `/website/index.html.md`.
+ * `/labs/blog/a-post` → `/labs/blog/a-post.md`,
+ * `/labs/` → `/labs/index.html.md`.
  * @param {string} route
  */
 export function markdownRouteOf(route) {
@@ -83,7 +83,7 @@ const DROPPED = new Set([
  *
  * @typedef {object} Site
  * @property {URL} root the site's root URL, with its base:
- *   `https://arize-labs.github.io/website/`
+ *   `https://arize-ai.github.io/labs/`
  * @property {Set<string>} mirrored the pages with a markdown copy
  */
 
@@ -137,7 +137,7 @@ function pageOf({ pathname, root }) {
   return decodeURI(pathname.slice(base.length)).replace(/(^|\/)index\.html$/, "").replace(/\/$/, "");
 }
 
-/** The route of a page, by its key: `blog/a-post` → `/website/blog/a-post`. */
+/** The route of a page, by its key: `blog/a-post` → `/labs/blog/a-post`. */
 const routeOf = (/** @type {string} */ page, /** @type {URL} */ root) => `${root.pathname}${page}`;
 
 /**

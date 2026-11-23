@@ -1,6 +1,6 @@
 ## Development
 
-When starting the dev server, use background mode:
+When starting the dev server, run it from `apps/website/` in background mode:
 
 ```
 astro dev --background
@@ -8,8 +8,8 @@ astro dev --background
 
 Manage the background server with `astro dev stop`, `astro dev status`, and `astro dev logs`.
 
-The site is served under a base path (`/website` on GitHub Pages; dev runs at
-`localhost:4321/website/`). Wrap internal root-relative links in `withBase`
+The site is served under a base path (`/labs` on GitHub Pages; dev runs at
+`localhost:4321/labs/`). Wrap internal root-relative links in `withBase`
 from `src/lib/url.ts`; never hard-code `href="/..."` in components.
 
 ## Design

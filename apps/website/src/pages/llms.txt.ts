@@ -15,7 +15,7 @@ import { site } from "../site.config";
 
 interface Link {
   title: string;
-  /** The page's route, with the base path: `/website/mission`. */
+  /** The page's route, with the base path: `/labs/mission`. */
   route: string;
   notes?: string;
   /** The link is to the page itself (a feed), not to a markdown copy. */

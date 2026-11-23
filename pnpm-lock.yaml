@@ -6,7 +6,9 @@ settings:
 
 importers:
 
-  .:
+  .: {}
+
+  apps/website:
     dependencies:
       '@astrojs/markdown-satteri':
         specifier: ^0.4.9

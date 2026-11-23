@@ -10,25 +10,27 @@ labelled placeholder frames.
 
 ## Commands
 
+Run these from `apps/website/`, or from the repo root as
+`pnpm --filter website <command>`.
+
 | Command | Does |
 |---|---|
-| `pnpm install` | Install dependencies |
-| `pnpm dev` | Dev server at `localhost:4321/website/` (drafts visible) |
+| `pnpm install` | Install dependencies (run anywhere in the monorepo) |
+| `pnpm dev` | Dev server at `localhost:4321/labs/` (drafts visible) |
 | `pnpm check` | Type-check `.astro` and `.ts` files |
 | `pnpm build` | Type-check, then build to `dist/` |
 | `pnpm preview` | Serve the build locally |
 
 ## Deploying
 
-Pushes to `main` deploy to GitHub Pages at
-<https://arize-labs.github.io/website/> via
-[`.github/workflows/deploy.yml`](./.github/workflows/deploy.yml) (Astro's
-[`withastro/action`](https://github.com/withastro/action)). The site is fully
-static.
+Pushes to `main` that touch `apps/website/` deploy to GitHub Pages at
+<https://arize-ai.github.io/labs/> via
+[`.github/workflows/deploy-website.yml`](../../.github/workflows/deploy-website.yml)
+at the root of the monorepo. The site is fully static.
 
-The site is served under a base path, `/website`. Write internal links
+The site is served under a base path, `/labs`. Write internal links
 root-relative and pass them through `withBase` from `src/lib/url.ts`
-(`withBase("/blog")` → `/website/blog`). In Markdown and MDX, root-relative
+(`withBase("/blog")` → `/labs/blog`). In Markdown and MDX, root-relative
 Markdown links and images (`[x](/blog)`, `![x](/a.png)`) are prefixed
 automatically. Raw HTML and JSX attributes (`<a href="/blog">`) are not, so use
 Markdown syntax for those. The workflow reads the Pages URL at build time,

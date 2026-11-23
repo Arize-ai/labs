@@ -20,10 +20,10 @@ const shikiTheme = (theme) => /** @type {NonNullable<import("astro").ShikiConfig
  * Where the site is served. On GitHub Pages the deploy workflow passes the
  * Pages site's origin and base path (from actions/configure-pages), so adding
  * a custom domain later needs no change here. Local builds default to the
- * project site, https://arize-labs.github.io/website.
+ * project site, https://arize-ai.github.io/labs.
  */
-const SITE = process.env.SITE_ORIGIN || "https://arize-labs.github.io";
-const BASE = (process.env.SITE_BASE_PATH ?? "/website") || "/";
+const SITE = process.env.SITE_ORIGIN || "https://arize-ai.github.io";
+const BASE = (process.env.SITE_BASE_PATH ?? "/labs") || "/";
 
 /**
  * Markdown and MDX links are written root-relative (`/blog/a-post`); prefix
